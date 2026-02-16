@@ -2,258 +2,377 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>High Performance Fire Simulation</title>
+    <title>3D Fire Simulation (Three.js)</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #222; font-family: sans-serif; }
-        canvas { display: block; }
+        body { margin: 0; overflow: hidden; background: #000; font-family: sans-serif; }
         #ui {
             position: absolute; top: 10px; left: 10px;
-            background: rgba(0, 0, 0, 0.8); color: white;
+            background: rgba(0, 0, 0, 0.85); color: white;
             padding: 15px; border-radius: 8px; pointer-events: none;
-            user-select: none;
+            user-select: none; border: 1px solid #444;
         }
         .control { margin-bottom: 10px; pointer-events: auto; }
-        label { display: inline-block; width: 120px; }
-        span { font-weight: bold; color: #ff5500; }
+        label { display: inline-block; width: 100px; font-size: 14px; }
+        input[type=range] { vertical-align: middle; }
+        button { 
+            background: #d32f2f; color: white; border: none; padding: 8px 16px; 
+            cursor: pointer; border-radius: 4px; font-weight: bold; pointer-events: auto;
+        }
+        button:hover { background: #b71c1c; }
     </style>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
 </head>
 <body>
 
 <div id="ui">
-    <h3>Fire Simulation (Spatial Hash)</h3>
+    <h3 style="margin-top:0">Forest Fire 3D</h3>
     <div class="control">
-        <label>Wind Direction:</label>
+        <label>Wind Direction</label>
         <input type="range" id="windDir" min="0" max="360" value="90">
-        <span id="windDirVal">90°</span>
+        <span id="windDirVal" style="color:#ff9800">90°</span>
     </div>
     <div class="control">
-        <label>Wind Speed:</label>
-        <input type="range" id="windSpeed" min="0" max="50" value="15">
-        <span id="windSpeedVal">15</span>
+        <label>Wind Speed</label>
+        <input type="range" id="windSpeed" min="0" max="50" value="20">
+        <span id="windSpeedVal" style="color:#ff9800">20</span>
     </div>
     <div class="control">
-        <p>Trees: <span id="treeCount">10000</span> | FPS: <span id="fps">0</span></p>
-        <p style="font-size: 0.8em; color: #aaa;">Click anywhere to start a fire.</p>
-        <button onclick="resetSim()">Reset Forest</button>
+        <p style="margin: 5px 0; font-size: 12px; color: #aaa;">
+            Left Click: Rotate | Right Click: Pan | Scroll: Zoom<br>
+            <span style="color: #fff;">CLICK TREES TO IGNITE</span>
+        </p>
+        <button id="resetBtn">Reset Simulation</button>
     </div>
+    <div style="font-size: 12px; color: #888;">Active Fires: <span id="fireCount" style="color:#ff5555">0</span></div>
 </div>
 
-<canvas id="simCanvas"></canvas>
+<script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-<script>
     // --- CONFIGURATION ---
     const CONFIG = {
-        treeCount: 10000,
-        treeRadius: 3,
-        cellSize: 20, // Grid bucket size
+        count: 15000,
+        worldSize: 400,
+        treeScale: 1.5,
+        cellSize: 10,
         igniteTemp: 100,
-        burnRate: 1.5,
-        heatTransfer: 2.0,
-        fireDuration: 200 // Frames until burnt out
+        fireDuration: 300, // Frames to burn
+        heatTransfer: 4.5
     };
 
-    const STATES = { NORMAL: 0, HEATING: 1, BURNING: 2, BURNT: 3 };
-    const COLORS = ["#2E8B57", "#FFD700", "#FF4500", "#333333"]; // Green, Gold, Red, Dark Grey
+    // States
+    const S_NORMAL = 0;
+    const S_HEATING = 1;
+    const S_BURNING = 2;
+    const S_BURNT = 3;
 
-    // --- GLOBAL VARIABLES ---
-    const canvas = document.getElementById('simCanvas');
-    const ctx = canvas.getContext('2d', { alpha: false });
-    let width, height;
+    // Colors
+    const C_GREEN = new THREE.Color(0x2E8B57);
+    const C_YELLOW = new THREE.Color(0xDDAA00);
+    const C_RED = new THREE.Color(0xFF4500);
+    const C_BLACK = new THREE.Color(0x111111);
+
+    // --- SCENE SETUP ---
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x202025);
+    scene.fog = new THREE.Fog(0x202025, 50, 300);
+
+    const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.set(0, 100, 150);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    // Controls
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+
+    // Lighting
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 1.0);
+    scene.add(hemiLight);
+    const dirLight = new THREE.DirectionalLight(0xffaa33, 1.5); // Orange sun
+    dirLight.position.set(50, 100, 50);
+    scene.add(dirLight);
+
+    // Ground
+    const groundGeo = new THREE.PlaneGeometry(CONFIG.worldSize * 1.5, CONFIG.worldSize * 1.5);
+    const groundMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.8 });
+    const ground = new THREE.Mesh(groundGeo, groundMat);
+    ground.rotation.x = -Math.PI / 2;
+    ground.position.y = -0.5;
+    scene.add(ground);
+
+    // --- SIMULATION DATA ---
+    // We use a flat Float32Array for raw speed (Data Oriented Design)
+    // Structure per tree: [x, z, temp, state, fuel, scaleY]
+    const STRIDE = 6;
+    let simData = new Float32Array(CONFIG.count * STRIDE);
     
-    let trees = [];
-    let grid = []; // 2D Spatial Hash
-    let cols, rows;
+    // Spatial Hash Grid
+    let gridRows = Math.ceil(CONFIG.worldSize / CONFIG.cellSize);
+    let gridCols = Math.ceil(CONFIG.worldSize / CONFIG.cellSize);
+    let grid = new Array(gridRows * gridCols).fill(0).map(() => []);
+
+    // Instanced Mesh (The magic for 15k trees)
+    // Simple Low Poly Tree: Cone
+    const geometry = new THREE.ConeGeometry(1, 4, 6); 
+    geometry.translate(0, 2, 0); // Pivot at bottom
+    const material = new THREE.MeshStandardMaterial({ 
+        color: 0xffffff, 
+        roughness: 0.8,
+        flatShading: true
+    });
     
-    let wind = { x: 0, y: 0 };
-    let frameCount = 0;
-    let lastTime = performance.now();
+    const mesh = new THREE.InstancedMesh(geometry, material, CONFIG.count);
+    mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    scene.add(mesh);
 
-    // --- INITIALIZATION ---
-    function resize() {
-        width = canvas.width = window.innerWidth;
-        height = canvas.height = window.innerHeight;
-        initGrid();
-        initTrees();
-    }
-    window.addEventListener('resize', resize);
+    const dummy = new THREE.Object3D();
+    const _color = new THREE.Color();
 
-    function initGrid() {
-        cols = Math.ceil(width / CONFIG.cellSize);
-        rows = Math.ceil(height / CONFIG.cellSize);
-        grid = new Array(cols * rows).fill(null).map(() => []);
-    }
+    // Wind
+    let wind = { x: 1, z: 0 };
+    let windSpeed = 20;
 
-    function initTrees() {
-        trees = new Float32Array(CONFIG.treeCount * 5); // x, y, temp, state, fuel
-        // Using flat array for performance (Struct of Arrays layout is faster, but this is simple)
-        // [i] = x, [i+1] = y, [i+2] = temp, [i+3] = state, [i+4] = fuel
-        
-        for (let i = 0; i < CONFIG.treeCount; i++) {
-            const idx = i * 5;
-            trees[idx] = Math.random() * width;     // x
-            trees[idx+1] = Math.random() * height;  // y
-            trees[idx+2] = 0;                       // temp
-            trees[idx+3] = STATES.NORMAL;           // state
-            trees[idx+4] = CONFIG.fireDuration;     // fuel
+    // --- INIT ---
+    function initWorld() {
+        for (let i = 0; i < CONFIG.count; i++) {
+            const idx = i * STRIDE;
+            
+            // Random Pos
+            const x = (Math.random() - 0.5) * CONFIG.worldSize;
+            const z = (Math.random() - 0.5) * CONFIG.worldSize;
+            
+            simData[idx] = x;
+            simData[idx+1] = z;
+            simData[idx+2] = 0; // Temp
+            simData[idx+3] = S_NORMAL; // State
+            simData[idx+4] = CONFIG.fireDuration; // Fuel
+            simData[idx+5] = 1.0; // Scale
+
+            // Set Initial Transform
+            dummy.position.set(x, 0, z);
+            dummy.scale.set(CONFIG.treeScale, CONFIG.treeScale * (0.8 + Math.random()*0.4), CONFIG.treeScale);
+            dummy.updateMatrix();
+            mesh.setMatrixAt(i, dummy.matrix);
+            mesh.setColorAt(i, C_GREEN);
         }
+        mesh.instanceMatrix.needsUpdate = true;
+        mesh.instanceColor.needsUpdate = true;
     }
 
-    // --- SIMULATION CORE ---
-    function updateWind() {
-        const dir = document.getElementById('windDir').value;
-        const speed = document.getElementById('windSpeed').value;
-        document.getElementById('windDirVal').innerText = dir + "°";
-        document.getElementById('windSpeedVal').innerText = speed;
+    initWorld();
 
-        const rad = dir * (Math.PI / 180);
-        wind.x = Math.cos(rad) * speed;
-        wind.y = Math.sin(rad) * speed;
-    }
+    // --- RAYCASTER (Mouse Click) ---
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
 
-    // Interactive Fire Starter
-    canvas.addEventListener('mousedown', (e) => {
-        const mx = e.clientX;
-        const my = e.clientY;
-        // Ignite trees near click
-        for (let i = 0; i < CONFIG.treeCount; i++) {
-            const idx = i * 5;
-            const dx = trees[idx] - mx;
-            const dy = trees[idx+1] - my;
-            if (dx*dx + dy*dy < 2500) { // 50px radius
-                trees[idx+3] = STATES.BURNING;
-                trees[idx+2] = CONFIG.igniteTemp + 10;
-            }
+    window.addEventListener('mousedown', (event) => {
+        if (event.button !== 0) return; // Left click only
+
+        mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+        mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+        raycaster.setFromCamera(mouse, camera);
+        
+        // Raycast against the InstancedMesh
+        const intersection = raycaster.intersectObject(mesh);
+        
+        if (intersection.length > 0) {
+            const instanceId = intersection[0].instanceId;
+            const idx = instanceId * STRIDE;
+            
+            // Ignite specific tree
+            simData[idx+2] = CONFIG.igniteTemp + 50; 
+            simData[idx+3] = S_BURNING;
+            
+            // Ignite neighbors (Explosion effect)
+            igniteRadius(simData[idx], simData[idx+1], 15);
         }
     });
 
-    // --- MAIN LOOP ---
-    function loop() {
-        // 1. Clear Grid
-        for (let i = 0; i < grid.length; i++) grid[i].length = 0;
+    function igniteRadius(ox, oz, radius) {
+        const rSq = radius * radius;
+        for(let i=0; i<CONFIG.count; i++) {
+            const idx = i*STRIDE;
+            const dx = simData[idx] - ox;
+            const dz = simData[idx+1] - oz;
+            if (dx*dx + dz*dz < rSq) {
+                simData[idx+3] = S_BURNING;
+                simData[idx+2] = CONFIG.igniteTemp + 10;
+            }
+        }
+    }
 
-        // 2. Populate Grid (Only burning trees matter for heat source)
-        for (let i = 0; i < CONFIG.treeCount; i++) {
-            const idx = i * 5;
-            if (trees[idx+3] === STATES.BURNING) {
-                const cx = Math.floor(trees[idx] / CONFIG.cellSize);
-                const cy = Math.floor(trees[idx+1] / CONFIG.cellSize);
-                if (cx >= 0 && cx < cols && cy >= 0 && cy < rows) {
-                    grid[cy * cols + cx].push(idx);
+    // --- SIMULATION LOOP ---
+    function updateSim() {
+        // 1. Clear Grid
+        for(let i=0; i<grid.length; i++) grid[i].length = 0;
+        let activeFires = 0;
+
+        // 2. Build Grid & Count Fires
+        const halfSize = CONFIG.worldSize / 2;
+        
+        for (let i = 0; i < CONFIG.count; i++) {
+            const idx = i * STRIDE;
+            if (simData[idx+3] === S_BURNING) {
+                activeFires++;
+                // Map world coord to grid coord
+                // (x + half) because grid array index must be positive
+                let cx = Math.floor((simData[idx] + halfSize) / CONFIG.cellSize);
+                let cz = Math.floor((simData[idx+1] + halfSize) / CONFIG.cellSize);
+                
+                // Clamp
+                if (cx >= 0 && cx < gridCols && cz >= 0 && cz < gridRows) {
+                    grid[cz * gridCols + cx].push(idx);
                 }
             }
         }
+        document.getElementById('fireCount').innerText = activeFires;
 
         // 3. Process Trees
-        ctx.fillStyle = "#111";
-        ctx.fillRect(0, 0, width, height);
+        const windX = wind.x * (windSpeed * 0.1);
+        const windZ = wind.z * (windSpeed * 0.1);
+        const reachSq = (CONFIG.cellSize * 1.5) ** 2;
+        
+        let colorNeedsUpdate = false;
+        let matrixNeedsUpdate = false;
 
-        // Pre-calculate wind offset for efficiency
-        // Wind shifts the heat zone. If wind blows Right (1,0), heat lands to the Right.
-        const windShiftX = wind.x * 2.0; 
-        const windShiftY = wind.y * 2.0; 
-        const reachSq = (CONFIG.cellSize * 1.5) ** 2; // Heat reach squared
+        for (let i = 0; i < CONFIG.count; i++) {
+            const idx = i * STRIDE;
+            let state = simData[idx+3];
 
-        for (let i = 0; i < CONFIG.treeCount; i++) {
-            const idx = i * 5;
-            let state = trees[idx+3];
-            
-            // Logic based on state
-            if (state === STATES.BURNT) {
-                // Do nothing, just draw
-                ctx.fillStyle = COLORS[3];
-            } 
-            else if (state === STATES.BURNING) {
+            if (state === S_BURNT) continue; // Dead
+
+            if (state === S_BURNING) {
                 // Consume fuel
-                trees[idx+4] -= CONFIG.burnRate + Math.random();
-                if (trees[idx+4] <= 0) trees[idx+3] = STATES.BURNT;
-                ctx.fillStyle = COLORS[2];
-            } 
+                simData[idx+4] -= 1; // burn rate
+                
+                // FLICKER EFFECT
+                // Randomly change color slightly to simulate fire animation
+                if (Math.random() > 0.5) {
+                    _color.copy(C_RED).multiplyScalar(0.8 + Math.random() * 0.5);
+                    mesh.setColorAt(i, _color);
+                    colorNeedsUpdate = true;
+                }
+
+                if (simData[idx+4] <= 0) {
+                    simData[idx+3] = S_BURNT;
+                    mesh.setColorAt(i, C_BLACK);
+                    
+                    // Shrink mesh
+                    dummy.position.set(simData[idx], 0, simData[idx+1]);
+                    dummy.scale.set(CONFIG.treeScale, CONFIG.treeScale * 0.1, CONFIG.treeScale); // Stump
+                    dummy.updateMatrix();
+                    mesh.setMatrixAt(i, dummy.matrix);
+                    matrixNeedsUpdate = true;
+                    colorNeedsUpdate = true;
+                }
+            }
             else {
-                // NORMAL or HEATING - Check for incoming heat
-                const x = trees[idx];
-                const y = trees[idx+1];
-                const cx = Math.floor(x / CONFIG.cellSize);
-                const cy = Math.floor(y / CONFIG.cellSize);
+                // Heating Logic
+                const x = simData[idx];
+                const z = simData[idx+1];
+                let cx = Math.floor((x + halfSize) / CONFIG.cellSize);
+                let cz = Math.floor((z + halfSize) / CONFIG.cellSize);
 
-                let heatReceived = 0;
+                let heat = 0;
 
-                // Check 3x3 Grid Neighbors
-                for (let ny = cy - 1; ny <= cy + 1; ny++) {
-                    for (let nx = cx - 1; nx <= cx + 1; nx++) {
-                        if (nx >= 0 && nx < cols && ny >= 0 && ny < rows) {
-                            const cell = grid[ny * cols + nx];
-                            for (let j = 0; j < cell.length; j++) {
-                                const fireIdx = cell[j];
+                // Check Neighbors
+                for(let nz = cz-1; nz <= cz+1; nz++) {
+                    for(let nx = cx-1; nx <= cx+1; nx++) {
+                        if (nx >= 0 && nx < gridCols && nz >= 0 && nz < gridRows) {
+                            const cell = grid[nz * gridCols + nx];
+                            for(let k=0; k<cell.length; k++) {
+                                const fIdx = cell[k];
+                                // Fire Pos
+                                const fx = simData[fIdx];
+                                const fz = simData[fIdx+1];
                                 
-                                // Vector from Fire to Me
-                                const fx = trees[fireIdx];
-                                const fy = trees[fireIdx+1];
-                                
-                                // "Effective" fire position is shifted by wind
-                                // (Fire blows its heat 'downwind')
-                                const efx = fx + windShiftX;
-                                const efy = fy + windShiftY;
+                                // Wind Shifted Fire Center
+                                // The heat source is "blown" away from the actual tree
+                                const ex = fx + windX;
+                                const ez = fz + windZ;
 
-                                const distSq = (x - efx)**2 + (y - efy)**2;
-                                
-                                if (distSq < reachSq) {
-                                    heatReceived += CONFIG.heatTransfer;
+                                const dSq = (x - ex)**2 + (z - ez)**2;
+                                if (dSq < reachSq) {
+                                    heat += CONFIG.heatTransfer;
                                 }
                             }
                         }
                     }
                 }
 
-                if (heatReceived > 0) {
-                    trees[idx+2] += heatReceived;
-                    trees[idx+3] = STATES.HEATING;
-                    ctx.fillStyle = COLORS[1]; // Heating
+                if (heat > 0) {
+                    simData[idx+2] += heat;
                     
-                    if (trees[idx+2] > CONFIG.igniteTemp) {
-                        trees[idx+3] = STATES.BURNING;
+                    // Visual Heating (Lerp Green -> Yellow)
+                    if (state === S_NORMAL) {
+                        simData[idx+3] = S_HEATING;
+                        mesh.setColorAt(i, C_YELLOW);
+                        colorNeedsUpdate = true;
                     }
-                } else {
-                    // Cooling
-                    if (trees[idx+2] > 0) trees[idx+2] -= 0.5;
-                    if (trees[idx+2] < 0) trees[idx+2] = 0;
                     
-                    if (trees[idx+3] === STATES.HEATING && trees[idx+2] < 10) {
-                        trees[idx+3] = STATES.NORMAL;
+                    if (simData[idx+2] > CONFIG.igniteTemp) {
+                        simData[idx+3] = S_BURNING;
+                        mesh.setColorAt(i, C_RED);
+                        colorNeedsUpdate = true;
                     }
-                    ctx.fillStyle = state === STATES.HEATING ? COLORS[1] : COLORS[0];
                 }
             }
-
-            // Draw Dot
-            ctx.beginPath();
-            ctx.arc(trees[idx], trees[idx+1], CONFIG.treeRadius, 0, Math.PI*2);
-            ctx.fill();
         }
 
-        // FPS Counter
-        frameCount++;
-        const now = performance.now();
-        if (now - lastTime >= 1000) {
-            document.getElementById('fps').innerText = frameCount;
-            frameCount = 0;
-            lastTime = now;
-        }
-
-        requestAnimationFrame(loop);
+        if (colorNeedsUpdate) mesh.instanceColor.needsUpdate = true;
+        if (matrixNeedsUpdate) mesh.instanceMatrix.needsUpdate = true;
     }
 
-    function resetSim() {
-        initTrees();
+    // --- UI EVENTS ---
+    function updateWind() {
+        const d = document.getElementById('windDir').value;
+        const s = document.getElementById('windSpeed').value;
+        
+        document.getElementById('windDirVal').innerText = d + "°";
+        document.getElementById('windSpeedVal').innerText = s;
+
+        windSpeed = parseFloat(s);
+        const rad = d * (Math.PI / 180);
+        wind.x = Math.sin(rad); // In 3D, usually X/Z plane
+        wind.z = Math.cos(rad);
     }
 
-    // Start
     document.getElementById('windDir').addEventListener('input', updateWind);
     document.getElementById('windSpeed').addEventListener('input', updateWind);
+    document.getElementById('resetBtn').addEventListener('click', initWorld);
     
-    resize();
+    // Initial Wind
     updateWind();
-    requestAnimationFrame(loop);
+
+    // --- ANIMATION LOOP ---
+    function animate() {
+        requestAnimationFrame(animate);
+        updateSim();
+        controls.update();
+        renderer.render(scene, camera);
+    }
+
+    // Handle Window Resize
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    animate();
 
 </script>
 </body>
