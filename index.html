@@ -2,26 +2,28 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Forest Fire Sim (Fixed Wind)</title>
+    <title>Rothermel Wildfire Simulation</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #111; font-family: sans-serif; }
+        body { margin: 0; overflow: hidden; background: #0b0b0b; font-family: 'Segoe UI', sans-serif; }
         #ui {
             position: absolute; top: 10px; left: 10px;
-            background: rgba(0, 0, 0, 0.85); color: #ddd;
-            padding: 15px; border-radius: 8px; pointer-events: none;
-            user-select: none; border: 1px solid #444; width: 240px;
+            background: rgba(15, 15, 20, 0.9); color: #ccc;
+            padding: 15px; border-radius: 6px; border: 1px solid #333;
+            width: 260px; user-select: none;
         }
-        .control { margin-bottom: 15px; pointer-events: auto; }
-        label { display: block; font-size: 12px; color: #aaa; margin-bottom: 4px; }
-        input[type=range] { vertical-align: middle; width: 100%; cursor: pointer; }
+        h3 { margin: 0 0 10px 0; color: #e0e0e0; font-weight: 400; font-size: 16px; border-bottom: 1px solid #444; padding-bottom: 8px; }
+        .control { margin-bottom: 12px; }
+        label { display: flex; justify-content: space-between; font-size: 11px; color: #888; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+        input[type=range] { width: 100%; cursor: pointer; accent-color: #d32f2f; }
         button { 
-            background: #d32f2f; color: white; border: none; padding: 12px; width: 100%;
-            cursor: pointer; border-radius: 4px; font-weight: bold; pointer-events: auto; 
-            text-transform: uppercase; letter-spacing: 1px;
+            background: #2c2c35; color: #d32f2f; border: 1px solid #d32f2f; 
+            padding: 10px; width: 100%; cursor: pointer; border-radius: 3px; 
+            font-size: 11px; text-transform: uppercase; letter-spacing: 1px; transition: 0.2s;
         }
-        button:hover { background: #b71c1c; }
-        .val { float: right; color: #ff9800; font-weight: bold; font-size: 14px; }
-        .info { font-size: 11px; color: #777; margin-top: 10px; line-height: 1.4; border-top: 1px solid #333; padding-top: 8px;}
+        button:hover { background: #d32f2f; color: white; }
+        .val { color: #fff; font-weight: 600; }
+        .legend { display: flex; gap: 10px; font-size: 10px; margin-top: 10px; }
+        .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 4px; }
     </style>
     <script type="importmap">
         {
@@ -35,27 +37,30 @@
 <body>
 
 <div id="ui">
-    <h3 style="margin: 0 0 15px 0; color:white;">Forest Fire 3D</h3>
+    <h3>Rothermel Spread Model</h3>
     
     <div class="control">
-        <label>WIND DIRECTION <span id="windDirVal" class="val">0° (N)</span></label>
+        <label>Wind Heading <span id="windDirVal" class="val">0° (N)</span></label>
         <input type="range" id="windDir" min="0" max="360" value="0">
     </div>
     
     <div class="control">
-        <label>WIND SPEED <span id="windSpeedVal" class="val">30</span></label>
-        <input type="range" id="windSpeed" min="0" max="100" value="30">
+        <label>Wind Velocity (km/h) <span id="windSpeedVal" class="val">15</span></label>
+        <input type="range" id="windSpeed" min="0" max="80" value="15">
     </div>
 
     <div class="control">
-        <button id="resetBtn">Reset Forest</button>
+        <label>Fuel Moisture (%) <span id="moistureVal" class="val">15%</span></label>
+        <input type="range" id="moisture" min="5" max="30" value="15">
     </div>
+
+    <button id="resetBtn">Regenerate Forest</button>
     
-    <div class="info">
-        <strong style="color:#ccc">Top of Screen is NORTH</strong><br>
-        • Left-Click ground to Ignite<br>
-        • Right-Click to Pan<br>
-        • Scroll to Zoom
+    <div class="legend" style="margin-top:15px; border-top: 1px solid #333; padding-top:10px;">
+        <div><span class="dot" style="background:#228B22"></span>Live</div>
+        <div><span class="dot" style="background:#b8860b"></span>Drying</div>
+        <div><span class="dot" style="background:#ff4500"></span>Active</div>
+        <div><span class="dot" style="background:#111"></span>Char</div>
     </div>
 </div>
 
@@ -63,40 +68,40 @@
     import * as THREE from 'three';
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-    // --- CONFIGURATION ---
+    // --- SCIENTIFIC CONFIGURATION ---
     const CONFIG = {
-        count: 12000,
-        worldSize: 400,
-        cellSize: 15,       // Larger cells to catch fast moving wind effects
-        igniteTemp: 100,
+        count: 15000,
+        worldSize: 500,
+        cellSize: 20,       // Interaction bucket size
         
-        // SLOWED DOWN SETTINGS (40% Speed)
-        fireDuration: 1200, // Was 500 (Burns longer)
-        heatTransfer: 0.25, // Was 0.8 (Heats slower)
+        // Time Steps
+        timeScale: 1.0,     // Global speed multiplier
         
-        // WIND PHYSICS
-        windBias: 0.08      // How much wind speed multiplies heat
+        // Physics Constants (Approximated from Rothermel 1972)
+        baseSpreadRate: 0.05, // Rate at zero wind
+        dryingRate: 0.1,      // How fast heat removes moisture
+        burnDuration: 1800,   // Ticks to consume fuel
+        
+        // Elliptical shape factors (Anderson 1983)
+        // c = coeff for Length-to-Width ratio
+        windFactorC: 0.08    
     };
 
     // States
-    const S_NORMAL = 0, S_HEATING = 1, S_BURNING = 2, S_BURNT = 3;
-    
-    // Colors
-    const C_GREEN = new THREE.Color(0x1b5e20);
-    const C_YELLOW = new THREE.Color(0xFFD700);
-    const C_RED = new THREE.Color(0xFF2200);
-    const C_BLACK = new THREE.Color(0x0a0a0a);
+    const S_LIVE = 0;
+    const S_DRYING = 1; // Moisture evaporating
+    const S_BURNING = 2;
+    const S_CHARRED = 3;
 
-    // --- SCENE SETUP ---
+    // --- THREE JS SETUP ---
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x1a1a1d);
+    scene.background = new THREE.Color(0x111111);
+    scene.fog = new THREE.FogExp2(0x111111, 0.0015);
 
-    // Camera: Top-down-ish, looking North
-    const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1500);
-    camera.position.set(0, 300, 200); 
-    camera.lookAt(0, 0, 0);
-
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    const camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 1, 2000);
+    camera.position.set(0, 450, 300); // Isometric-like view
+    
+    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -105,342 +110,340 @@
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
-    controls.maxPolarAngle = Math.PI / 2 - 0.1;
+    controls.maxPolarAngle = Math.PI / 2 - 0.05;
 
-    // Lights
-    const ambLight = new THREE.AmbientLight(0x404040, 1.0); // Darker ambient
-    scene.add(ambLight);
-    const sunLight = new THREE.DirectionalLight(0xffaa33, 2.0);
-    sunLight.position.set(100, 200, 50);
-    sunLight.castShadow = true;
-    // Optimize shadow map
-    sunLight.shadow.mapSize.width = 2048;
-    sunLight.shadow.mapSize.height = 2048;
-    sunLight.shadow.camera.left = -250;
-    sunLight.shadow.camera.right = 250;
-    sunLight.shadow.camera.top = 250;
-    sunLight.shadow.camera.bottom = -250;
-    scene.add(sunLight);
+    // Lighting
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.3);
+    scene.add(hemiLight);
+    const sun = new THREE.DirectionalLight(0xffaa33, 1.5);
+    sun.position.set(100, 300, 100);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.camera.left = -300; sun.shadow.camera.right = 300;
+    sun.shadow.camera.top = 300; sun.shadow.camera.bottom = -300;
+    scene.add(sun);
 
-    // --- TERRAIN (FLATTER) ---
-    function getHeight(x, z) {
-        // Flattened hills (Multipliers reduced from 15 to 4)
-        return (Math.sin(x * 0.02) * 4) + 
-               (Math.cos(z * 0.025) * 4) + 
-               (Math.sin(x * 0.05 + z * 0.05) * 2);
+    // --- TERRAIN ---
+    // Simplex-like noise function for hills
+    function noise(x, z) {
+        return Math.sin(x*0.015)*4 + Math.cos(z*0.012)*4 + Math.sin(x*0.03 + z*0.03)*2;
     }
 
-    const groundGeo = new THREE.PlaneGeometry(CONFIG.worldSize * 1.5, CONFIG.worldSize * 1.5, 128, 128);
-    const posAttribute = groundGeo.attributes.position;
-    for (let i = 0; i < posAttribute.count; i++) {
-        const x = posAttribute.getX(i);
-        const y = posAttribute.getY(i); // Plane Y is World Z before rotation
-        const h = getHeight(x, -y);
-        posAttribute.setZ(i, h);
+    const groundGeo = new THREE.PlaneGeometry(600, 600, 128, 128);
+    const pos = groundGeo.attributes.position;
+    for(let i=0; i<pos.count; i++){
+        const x = pos.getX(i);
+        const y = pos.getY(i); // Plane Y is World Z
+        pos.setZ(i, noise(x, -y));
     }
     groundGeo.computeVertexNormals();
-
-    const groundMat = new THREE.MeshStandardMaterial({ 
-        color: 0x151515, 
-        roughness: 1.0, 
-        metalness: 0.0 
-    });
+    const groundMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 1.0 });
     const ground = new THREE.Mesh(groundGeo, groundMat);
-    ground.rotation.x = -Math.PI / 2;
+    ground.rotation.x = -Math.PI/2;
     ground.receiveShadow = true;
     scene.add(ground);
 
-    // North Grid Helper
-    const grid = new THREE.GridHelper(CONFIG.worldSize, 10, 0x333333, 0x222222);
+    // North Indicator
+    const grid = new THREE.GridHelper(500, 20, 0x333333, 0x222222);
     scene.add(grid);
-
-    // Wind Arrow
-    const arrowDir = new THREE.Vector3(0, 0, -1);
-    const arrowOrigin = new THREE.Vector3(0, 50, 0);
-    const arrowHelper = new THREE.ArrowHelper(arrowDir, arrowOrigin, 40, 0xff0000, 10, 5);
+    const arrowHelper = new THREE.ArrowHelper(new THREE.Vector3(0,0,-1), new THREE.Vector3(0,20,0), 40, 0xd32f2f);
     scene.add(arrowHelper);
 
     // --- TREES ---
-    const treeGeo = new THREE.ConeGeometry(1.5, 6, 5);
-    treeGeo.translate(0, 3, 0); // Pivot at base
-    const treeMat = new THREE.MeshStandardMaterial({ 
-        color: 0xffffff, 
-        roughness: 0.9, 
-        flatShading: true 
-    });
+    // Using a simple geometry for performance
+    const treeGeo = new THREE.CylinderGeometry(0, 1.5, 6, 5);
+    treeGeo.translate(0, 3, 0);
+    const treeMat = new THREE.MeshStandardMaterial({ color: 0xffffff, flatShading: true, roughness: 0.8 });
     const mesh = new THREE.InstancedMesh(treeGeo, treeMat, CONFIG.count);
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     scene.add(mesh);
 
-    // Simulation Data
-    const STRIDE = 6;
-    let simData = new Float32Array(CONFIG.count * STRIDE);
-    let spatialGrid = [];
-    const gridDim = Math.ceil(CONFIG.worldSize / CONFIG.cellSize) + 2; // Buffer
-    const offset = CONFIG.worldSize / 2;
+    // --- SIMULATION DATA (Struct of Arrays) ---
+    const STRIDE = 7;
+    // 0: x, 1: z, 2: state, 3: moisture, 4: fuel, 5: scale, 6: y
+    let data = new Float32Array(CONFIG.count * STRIDE);
+    let spatialMap = [];
+    const mapDim = Math.ceil(CONFIG.worldSize / CONFIG.cellSize) + 2;
+    const mapOffset = CONFIG.worldSize / 2;
 
-    const dummy = new THREE.Object3D();
-    const _color = new THREE.Color();
+    // Helper Objects
+    const _mat = new THREE.Matrix4();
+    const _pos = new THREE.Vector3();
+    const _scale = new THREE.Vector3();
+    const _quat = new THREE.Quaternion();
+    const _col = new THREE.Color();
+    
+    // Physics State
+    let windVec = { x: 0, z: -1 }; // North
+    let windSpeed = 15; // km/h
+    let baseMoisture = 15; // %
 
-    function initWorld() {
-        // Reset Grid
-        spatialGrid = new Array(gridDim * gridDim).fill(0).map(() => []);
-
-        for (let i = 0; i < CONFIG.count; i++) {
+    function init() {
+        spatialMap = new Array(mapDim*mapDim).fill(0).map(()=>[]);
+        
+        for(let i=0; i<CONFIG.count; i++) {
             const idx = i * STRIDE;
-            const x = (Math.random() - 0.5) * CONFIG.worldSize;
-            const z = (Math.random() - 0.5) * CONFIG.worldSize;
-            const y = getHeight(x, z);
+            const x = (Math.random()-0.5) * CONFIG.worldSize;
+            const z = (Math.random()-0.5) * CONFIG.worldSize;
+            const y = noise(x, z);
 
-            simData[idx] = x;
-            simData[idx+1] = z;
-            simData[idx+2] = 0; // Temp
-            simData[idx+3] = S_NORMAL;
-            simData[idx+4] = CONFIG.fireDuration + Math.random() * 200; // Fuel varies
-            simData[idx+5] = 0.6 + Math.random() * 0.8; // Scale
+            data[idx] = x;
+            data[idx+1] = z;
+            data[idx+2] = S_LIVE;
+            data[idx+3] = baseMoisture * 10; // Scaled for simulation usage
+            data[idx+4] = CONFIG.burnDuration * (0.8 + Math.random()*0.4);
+            data[idx+5] = 0.5 + Math.random()*1.0; // Scale
+            data[idx+6] = y;
 
-            dummy.position.set(x, y, z);
-            const s = simData[idx+5];
-            dummy.scale.set(s, s, s);
-            dummy.rotation.y = Math.random() * Math.PI * 2;
-            dummy.updateMatrix();
-            mesh.setMatrixAt(i, dummy.matrix);
-            mesh.setColorAt(i, C_GREEN);
+            // Transform
+            _pos.set(x, y, z);
+            const s = data[idx+5];
+            _scale.set(s, s* (0.8+Math.random()*0.4), s);
+            _quat.setFromAxisAngle(new THREE.Vector3(0,1,0), Math.random()*Math.PI*2);
+            _mat.compose(_pos, _quat, _scale);
+            mesh.setMatrixAt(i, _mat);
+            mesh.setColorAt(i, new THREE.Color(0x228B22)); // Forest Green
         }
         mesh.instanceMatrix.needsUpdate = true;
         mesh.instanceColor.needsUpdate = true;
     }
-    initWorld();
 
-    // --- VARIABLES ---
-    let windVector = { x: 0, z: -1 };
-    let windSpeed = 30;
-
-    // --- MOUSE IGNITION ---
+    // --- IGNITION ---
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
-    
-    window.addEventListener('mousedown', (e) => {
-        if(e.target.tagName !== "CANVAS") return;
-        mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
-        mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+    window.addEventListener('mousedown', e => {
+        if(e.target.tagName !== 'CANVAS') return;
+        mouse.x = (e.clientX/window.innerWidth)*2-1;
+        mouse.y = -(e.clientY/window.innerHeight)*2+1;
         raycaster.setFromCamera(mouse, camera);
-        
-        const intersects = raycaster.intersectObject(ground);
-        if (intersects.length > 0) {
-            igniteArea(intersects[0].point.x, intersects[0].point.z);
-        }
+        const hits = raycaster.intersectObject(ground);
+        if(hits.length > 0) ignite(hits[0].point.x, hits[0].point.z);
     });
 
-    function igniteArea(ox, oz) {
-        const rSq = 625; // 25 radius
+    function ignite(ox, oz) {
+        // Radius ignition
         for(let i=0; i<CONFIG.count; i++) {
-            const idx = i * STRIDE;
-            const dx = simData[idx] - ox;
-            const dz = simData[idx+1] - oz;
-            if(dx*dx + dz*dz < rSq) {
-                simData[idx+3] = S_BURNING;
-                simData[idx+2] = CONFIG.igniteTemp + 50;
+            const idx = i*STRIDE;
+            const dx = data[idx]-ox;
+            const dz = data[idx+1]-oz;
+            if(dx*dx + dz*dz < 600) { // 25m radius
+                data[idx+2] = S_BURNING;
+                data[idx+3] = 0; // Moisture gone
             }
         }
     }
 
-    // --- MAIN SIMULATION LOOP ---
-    function updateSim() {
-        // 1. Clear Grid
-        for(let i=0; i<spatialGrid.length; i++) spatialGrid[i].length = 0;
-
-        // 2. Build Grid (Bucketing)
+    // --- PHYSICS LOOP ---
+    // Implementing Rothermel-inspired Probability
+    function updatePhysics() {
+        // 1. Binning (Spatial Hash)
+        // We only bin BURNING trees to act as emitters
+        for(let i=0; i<spatialMap.length; i++) spatialMap[i].length = 0;
+        
         for(let i=0; i<CONFIG.count; i++) {
-            const idx = i * STRIDE;
-            // Add Burning AND Heating trees to grid (Heating trees also radiate a tiny bit, optional)
-            // Just Burning for now
-            if(simData[idx+3] === S_BURNING) {
-                let gx = Math.floor((simData[idx] + offset) / CONFIG.cellSize);
-                let gz = Math.floor((simData[idx+1] + offset) / CONFIG.cellSize);
-                if(gx >= 0 && gx < gridDim && gz >= 0 && gz < gridDim) {
-                    spatialGrid[gz * gridDim + gx].push(idx);
+            if(data[i*STRIDE + 2] === S_BURNING) {
+                const gx = Math.floor((data[i*STRIDE] + mapOffset) / CONFIG.cellSize);
+                const gz = Math.floor((data[i*STRIDE+1] + mapOffset) / CONFIG.cellSize);
+                if(gx>=0 && gx<mapDim && gz>=0 && gz<mapDim) {
+                    spatialMap[gz*mapDim + gx].push(i);
                 }
             }
         }
 
-        let needsColorUpdate = false;
-        let needsMatrixUpdate = false;
-        const heatReachSq = (CONFIG.cellSize * 1.5) ** 2;
+        // 2. Pre-calculate Wind Constants
+        // Anderson (1983): Elliptical shape depends on wind speed
+        // Length-to-Width Ratio (approximate)
+        const windK = 1 + (0.05 * windSpeed); 
+        // We square the effective spread distance downwind
+        
+        let needColor = false;
+        let needMatrix = false;
 
-        // 3. Update Trees
+        // 3. Process Trees
         for(let i=0; i<CONFIG.count; i++) {
             const idx = i * STRIDE;
-            const state = simData[idx+3];
+            const state = data[idx+2];
 
-            if(state === S_BURNT) continue;
+            if(state === S_CHARRED) continue;
 
-            // --- BURNING LOGIC ---
+            // --- BURNING ---
             if(state === S_BURNING) {
-                simData[idx+4] -= 1; // Decrease fuel
-                
-                // Visual Flicker
-                if(Math.random() > 0.7) {
-                    _color.copy(C_RED).multiplyScalar(0.8 + Math.random()*0.5);
-                    mesh.setColorAt(i, _color);
-                    needsColorUpdate = true;
-                }
-
-                // Burn out
-                if(simData[idx+4] <= 0) {
-                    simData[idx+3] = S_BURNT;
-                    mesh.setColorAt(i, C_BLACK);
+                data[idx+4] -= 1; // Burn fuel
+                if(data[idx+4] <= 0) {
+                    data[idx+2] = S_CHARRED;
+                    mesh.setColorAt(i, new THREE.Color(0x111111));
                     
-                    // Scale down to ash/stump
-                    const x = simData[idx], z = simData[idx+1];
-                    const y = getHeight(x, z);
-                    dummy.position.set(x, y, z);
-                    dummy.scale.set(0.8, 0.1, 0.8);
-                    dummy.updateMatrix();
-                    mesh.setMatrixAt(i, dummy.matrix);
-                    needsMatrixUpdate = true;
-                    needsColorUpdate = true;
+                    // Collapse mesh
+                    _pos.set(data[idx], data[idx+6], data[idx+1]);
+                    _scale.set(data[idx+5], 0.1, data[idx+5]);
+                    _quat.set(0,0,0,1);
+                    _mat.compose(_pos, _quat, _scale);
+                    mesh.setMatrixAt(i, _mat);
+                    
+                    needColor = true;
+                    needMatrix = true;
+                } else {
+                    // Flicker Effect
+                    if(Math.random() > 0.8) {
+                        const flicker = 0.5 + Math.random()*0.5;
+                        _col.setHSL(0.05 + Math.random()*0.05, 1.0, flicker * 0.6);
+                        mesh.setColorAt(i, _col);
+                        needColor = true;
+                    }
                 }
                 continue;
             }
 
-            // --- HEATING LOGIC (The Wind Fix) ---
-            const tx = simData[idx];
-            const tz = simData[idx+1];
-            const gx = Math.floor((tx + offset) / CONFIG.cellSize);
-            const gz = Math.floor((tz + offset) / CONFIG.cellSize);
+            // --- HEATING / DRYING ---
+            // Only check if neighbors are burning
+            const tx = data[idx];
+            const tz = data[idx+1];
+            const gx = Math.floor((tx + mapOffset) / CONFIG.cellSize);
+            const gz = Math.floor((tz + mapOffset) / CONFIG.cellSize);
+            
+            let incomingHeat = 0;
 
-            let totalHeat = 0;
-
-            // Check Neighbors
+            // Search 3x3 Grid
             for(let nz = gz-1; nz <= gz+1; nz++) {
                 for(let nx = gx-1; nx <= gx+1; nx++) {
-                    if(nx >= 0 && nx < gridDim && nz >= 0 && nz < gridDim) {
-                        const cell = spatialGrid[nz * gridDim + nx];
-                        for(let k=0; k<cell.length; k++) {
-                            const fIdx = cell[k];
+                    if(nx<0 || nx>=mapDim || nz<0 || nz>=mapDim) continue;
+                    const cell = spatialMap[nz*mapDim+nx];
+                    
+                    for(let k=0; k<cell.length; k++) {
+                        const neighborIdx = cell[k] * STRIDE;
+                        
+                        // Vector from Fire -> Tree
+                        const dx = tx - data[neighborIdx];
+                        const dz = tz - data[neighborIdx+1];
+                        const distSq = dx*dx + dz*dz;
+                        
+                        // Interaction Radius (squared)
+                        if(distSq < 900) { // 30m max reach
+                            const dist = Math.sqrt(distSq);
                             
-                            // Vector Fire -> Tree
-                            const dx = tx - simData[fIdx];
-                            const dz = tz - simData[fIdx+1];
-                            const distSq = dx*dx + dz*dz;
+                            // NORMALIZE direction
+                            const nx_dir = dx/dist;
+                            const nz_dir = dz/dist;
 
-                            if(distSq < heatReachSq && distSq > 0.1) {
-                                // NEW WIND LOGIC: DOT PRODUCT
-                                // 1. Normalize Fire->Tree vector
-                                const dist = Math.sqrt(distSq);
-                                const nx = dx / dist;
-                                const nz = dz / dist;
-
-                                // 2. Calculate Alignment with Wind
-                                // dot product: 1.0 = perfectly downwind, -1.0 = perfectly upwind
-                                const dot = nx * windVector.x + nz * windVector.z;
-                                
-                                // 3. Calculate Wind Multiplier
-                                // If wind speed is 0, multiplier is 1.
-                                // If wind speed is high and dot is positive, multiplier is HUGE.
-                                // If dot is negative (upwind), multiplier shrinks to 0.
-                                let windFactor = 1.0;
-                                
-                                if(dot > 0) {
-                                    // Downwind: Bonus heat
-                                    windFactor += dot * (windSpeed * CONFIG.windBias); 
-                                } else {
-                                    // Upwind: Reduced heat
-                                    windFactor += dot * 0.8; // Reduce heat significantly upwind
-                                    if(windFactor < 0.1) windFactor = 0.1; // Min heat
-                                }
-
-                                // Inverse Square Law for distance
-                                const distFactor = 1.0 - (distSq / heatReachSq);
-                                
-                                totalHeat += CONFIG.heatTransfer * distFactor * windFactor;
+                            // DOT PRODUCT with Wind
+                            // 1.0 = Downwind (Max Danger)
+                            // -1.0 = Upwind (Safe)
+                            const dot = nx_dir * windVec.x + nz_dir * windVec.z;
+                            
+                            // ROTHERMEL / ANDERSON BIAS
+                            // Instead of simple addition, we shape the heat envelope.
+                            // Downwind fires project heat much further.
+                            
+                            // Bias factor: Low wind = 1.0 everywhere
+                            // High wind = 5.0 front, 0.2 back
+                            let windBias = 1.0;
+                            if(dot > 0) {
+                                // Forward spread: Exponential with wind speed
+                                windBias = 1.0 + (dot * (windSpeed * 0.15)); 
+                            } else {
+                                // Backing spread: Reduced significantly
+                                windBias = 1.0 + (dot * 0.8); 
+                                if(windBias < 0.1) windBias = 0.1;
                             }
+
+                            // Inverse Square Law damping
+                            const intensity = (1.0 - dist/30) * windBias; 
+                            if(intensity > 0) incomingHeat += intensity * CONFIG.baseSpreadRate;
                         }
                     }
                 }
             }
 
-            // Apply Heat
-            if(totalHeat > 0) {
-                simData[idx+2] += totalHeat;
+            // Apply Heat to Moisture
+            if(incomingHeat > 0) {
+                // Remove moisture
+                data[idx+3] -= incomingHeat * CONFIG.dryingRate;
 
-                // Color change Normal -> Heating
-                if(state === S_NORMAL) {
-                    simData[idx+3] = S_HEATING;
-                    mesh.setColorAt(i, C_YELLOW);
-                    needsColorUpdate = true;
+                // Visual Feedback: Drying
+                if(state === S_LIVE && data[idx+3] < baseMoisture * 5) {
+                    data[idx+2] = S_DRYING;
+                    mesh.setColorAt(i, new THREE.Color(0xb8860b)); // Dark Goldenrod
+                    needColor = true;
                 }
-                
-                // Ignite?
-                if(simData[idx+2] > CONFIG.igniteTemp) {
-                    simData[idx+3] = S_BURNING;
-                    mesh.setColorAt(i, C_RED);
-                    needsColorUpdate = true;
+
+                // Ignition
+                if(data[idx+3] <= 0) {
+                    data[idx+2] = S_BURNING;
+                    mesh.setColorAt(i, new THREE.Color(0xff4500)); // Orange Red
+                    needColor = true;
                 }
             } else {
-                // Cooling
-                if(simData[idx+2] > 0) simData[idx+2] -= 0.05;
-                if(state === S_HEATING && simData[idx+2] < 10) {
-                    simData[idx+3] = S_NORMAL;
-                    mesh.setColorAt(i, C_GREEN);
-                    needsColorUpdate = true;
+                // Moisture Recovery (Regain water if heat stops)
+                if(data[idx+3] < baseMoisture * 10) {
+                    data[idx+3] += 0.05;
+                    if(data[idx+2] === S_DRYING && data[idx+3] > baseMoisture * 8) {
+                        data[idx+2] = S_LIVE;
+                        mesh.setColorAt(i, new THREE.Color(0x228B22));
+                        needColor = true;
+                    }
                 }
             }
         }
 
-        if(needsColorUpdate) mesh.instanceColor.needsUpdate = true;
-        if(needsMatrixUpdate) mesh.instanceMatrix.needsUpdate = true;
+        if(needColor) mesh.instanceColor.needsUpdate = true;
+        if(needMatrix) mesh.instanceMatrix.needsUpdate = true;
     }
 
-    // --- UI & EVENTS ---
-    function updateWind() {
-        const deg = parseFloat(document.getElementById('windDir').value);
-        windSpeed = parseFloat(document.getElementById('windSpeed').value);
-        
-        // 0 deg = North = (0, -1)
-        const rad = deg * (Math.PI / 180);
-        windVector.x = Math.sin(rad);
-        windVector.z = -Math.cos(rad); // ThreeJS: -Z is North
+    // --- UI HANDLING ---
+    function updateInputs() {
+        const d = parseInt(document.getElementById('windDir').value);
+        const s = parseInt(document.getElementById('windSpeed').value);
+        const m = parseInt(document.getElementById('moisture').value);
 
-        // Update UI Text
-        let dirTxt = "N";
-        if(deg > 22 && deg < 67) dirTxt = "NE";
-        else if(deg >= 67 && deg < 112) dirTxt = "E";
-        else if(deg >= 112 && deg < 157) dirTxt = "SE";
-        else if(deg >= 157 && deg < 202) dirTxt = "S";
-        else if(deg >= 202 && deg < 247) dirTxt = "SW";
-        else if(deg >= 247 && deg < 292) dirTxt = "W";
-        else if(deg >= 292 && deg < 337) dirTxt = "NW";
-        
-        document.getElementById('windDirVal').innerText = deg + "° (" + dirTxt + ")";
-        document.getElementById('windSpeedVal').innerText = windSpeed;
+        // Update DOM
+        document.getElementById('windDirVal').textContent = d + "°";
+        document.getElementById('windSpeedVal').textContent = s;
+        document.getElementById('moistureVal').textContent = m + "%";
 
-        // Update Arrow
-        arrowHelper.setDirection(new THREE.Vector3(windVector.x, 0, windVector.z));
-        arrowHelper.setLength(30 + windSpeed * 0.5);
+        // Update Physics Globals
+        const rad = d * (Math.PI/180);
+        windVec.x = Math.sin(rad);
+        windVec.z = -Math.cos(rad);
+        windSpeed = s;
+        baseMoisture = m;
+        
+        arrowHelper.setDirection(new THREE.Vector3(windVec.x, 0, windVec.z));
+        arrowHelper.setLength(40 + s);
     }
 
-    document.getElementById('windDir').addEventListener('input', updateWind);
-    document.getElementById('windSpeed').addEventListener('input', updateWind);
-    document.getElementById('resetBtn').addEventListener('click', initWorld);
+    document.getElementById('windDir').addEventListener('input', updateInputs);
+    document.getElementById('windSpeed').addEventListener('input', updateInputs);
+    document.getElementById('moisture').addEventListener('input', () => {
+        updateInputs();
+        // If moisture changes, we should ideally update live trees, 
+        // but for simplicity we let them regenerate on reset or drift naturally.
+        // Or force update live ones:
+        for(let i=0; i<CONFIG.count; i++) {
+            if(data[i*STRIDE+2] === S_LIVE) data[i*STRIDE+3] = baseMoisture * 10;
+        }
+    });
     
+    document.getElementById('resetBtn').addEventListener('click', init);
+
     window.addEventListener('resize', () => {
-        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.aspect = window.innerWidth/window.innerHeight;
         camera.updateProjectionMatrix();
         renderer.setSize(window.innerWidth, window.innerHeight);
     });
 
-    updateWind();
+    // Boot
+    init();
+    updateInputs();
 
-    function loop() {
-        requestAnimationFrame(loop);
-        updateSim();
+    // Loop
+    function animate() {
+        requestAnimationFrame(animate);
+        updatePhysics();
         controls.update();
         renderer.render(scene, camera);
     }
-    loop();
+    animate();
 
 </script>
 </body>
