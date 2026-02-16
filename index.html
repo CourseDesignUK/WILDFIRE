@@ -2,23 +2,24 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>3D Fire Simulation (Hills)</title>
+    <title>3D Fire Sim (North Aligned)</title>
     <style>
         body { margin: 0; overflow: hidden; background: #000; font-family: sans-serif; }
         #ui {
             position: absolute; top: 10px; left: 10px;
             background: rgba(0, 0, 0, 0.85); color: white;
             padding: 15px; border-radius: 8px; pointer-events: none;
-            user-select: none; border: 1px solid #444;
+            user-select: none; border: 1px solid #444; width: 220px;
         }
-        .control { margin-bottom: 10px; pointer-events: auto; }
-        label { display: inline-block; width: 100px; font-size: 14px; }
-        input[type=range] { vertical-align: middle; }
+        .control { margin-bottom: 12px; pointer-events: auto; }
+        label { display: inline-block; width: 100px; font-size: 13px; color: #ccc; }
+        input[type=range] { vertical-align: middle; width: 100%; margin-top: 5px;}
         button { 
-            background: #d32f2f; color: white; border: none; padding: 8px 16px; 
-            cursor: pointer; border-radius: 4px; font-weight: bold; pointer-events: auto;
+            background: #d32f2f; color: white; border: none; padding: 10px; width: 100%;
+            cursor: pointer; border-radius: 4px; font-weight: bold; pointer-events: auto; text-transform: uppercase;
         }
         button:hover { background: #b71c1c; }
+        .val { float: right; color: #ff9800; font-weight: bold; }
     </style>
     <script type="importmap">
         {
@@ -32,25 +33,27 @@
 <body>
 
 <div id="ui">
-    <h3 style="margin-top:0">Forest Fire (Hills)</h3>
+    <h3 style="margin: 0 0 10px 0; border-bottom: 1px solid #555; padding-bottom: 5px;">Forest Fire 3D</h3>
+    
     <div class="control">
-        <label>Wind Direction</label>
-        <input type="range" id="windDir" min="0" max="360" value="90">
-        <span id="windDirVal" style="color:#ff9800">90°</span>
+        <label>Wind Direction</label> <span id="windDirVal" class="val">0° (N)</span>
+        <input type="range" id="windDir" min="0" max="360" value="0">
     </div>
+    
     <div class="control">
-        <label>Wind Speed</label>
-        <input type="range" id="windSpeed" min="0" max="50" value="20">
-        <span id="windSpeedVal" style="color:#ff9800">20</span>
+        <label>Wind Speed</label> <span id="windSpeedVal" class="val">25</span>
+        <input type="range" id="windSpeed" min="0" max="100" value="25">
     </div>
+
     <div class="control">
-        <p style="margin: 5px 0; font-size: 12px; color: #aaa;">
-            Left Click: Rotate | Right Click: Pan | Scroll: Zoom<br>
-            <span style="color: #fff;">CLICK TREES TO IGNITE</span>
-        </p>
-        <button id="resetBtn">Reset Simulation</button>
+        <button id="resetBtn">Reset Forest</button>
     </div>
-    <div style="font-size: 12px; color: #888;">Active Fires: <span id="fireCount" style="color:#ff5555">0</span></div>
+    
+    <div style="font-size: 11px; color: #888; margin-top: 5px;">
+        <span style="color:#aaa">Top of Screen = NORTH</span><br>
+        Click ground/trees to ignite.<br>
+        Scroll to Zoom. Right-Click Pan.
+    </div>
 </div>
 
 <script type="module">
@@ -59,131 +62,136 @@
 
     // --- CONFIGURATION ---
     const CONFIG = {
-        count: 12000,           // Number of trees
+        count: 12000,
         worldSize: 400,
-        treeScale: 1.5,
         cellSize: 10,
         igniteTemp: 100,
-        fireDuration: 600,      // SLOWED DOWN: Trees burn longer (was 300)
-        heatTransfer: 0.8       // SLOWED DOWN: Heat spreads slower (was 4.5)
+        fireDuration: 500,  
+        heatTransfer: 0.8,   
+        baseWindInfluence: 0.15 // Multiplier for wind vector
     };
 
     const S_NORMAL = 0, S_HEATING = 1, S_BURNING = 2, S_BURNT = 3;
-    const C_GREEN = new THREE.Color(0x2E8B57);
-    const C_YELLOW = new THREE.Color(0xDDAA00);
+    const C_GREEN = new THREE.Color(0x228B22); // Forest Green
+    const C_YELLOW = new THREE.Color(0xFFD700);
     const C_RED = new THREE.Color(0xFF4500);
     const C_BLACK = new THREE.Color(0x111111);
 
-    // --- SCENE SETUP ---
+    // --- SCENE ---
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x202025);
-    // REMOVED FOG per request
-    
-    const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
-    camera.position.set(0, 150, 200);
+
+    // Camera Aligned: Positive Z is "Down/South", Negative Z is "Up/North"
+    const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.set(0, 250, 150); // High angle looking down-ish
+    camera.lookAt(0, 0, 0);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.shadowMap.enabled = true; // Enable shadows for depth
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     document.body.appendChild(renderer.domElement);
 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
+    controls.maxPolarAngle = Math.PI / 2 - 0.1; // Prevent going under ground
 
     // Lighting
-    const ambientLight = new THREE.AmbientLight(0x404040, 2); // Soft white light
-    scene.add(ambientLight);
-    const dirLight = new THREE.DirectionalLight(0xffaa33, 2);
-    dirLight.position.set(100, 200, 50);
-    dirLight.castShadow = true;
-    scene.add(dirLight);
+    const ambLight = new THREE.AmbientLight(0x404040, 1.5);
+    scene.add(ambLight);
+    const sunLight = new THREE.DirectionalLight(0xffaa33, 2.5);
+    sunLight.position.set(50, 200, 100);
+    sunLight.castShadow = true;
+    sunLight.shadow.mapSize.width = 2048;
+    sunLight.shadow.mapSize.height = 2048;
+    sunLight.shadow.camera.near = 0.5;
+    sunLight.shadow.camera.far = 500;
+    sunLight.shadow.camera.left = -200;
+    sunLight.shadow.camera.right = 200;
+    sunLight.shadow.camera.top = 200;
+    sunLight.shadow.camera.bottom = -200;
+    scene.add(sunLight);
 
-    // --- TERRAIN GENERATION (Hills) ---
-    // Simple math function to create hills without external libraries
+    // --- TERRAIN ---
     function getHeight(x, z) {
-        // Combine sine waves for rolling hills
-        const y1 = Math.sin(x * 0.02) * 20;
-        const y2 = Math.cos(z * 0.02) * 20;
-        const y3 = Math.sin(x * 0.05 + z * 0.05) * 10;
-        return y1 + y2 + y3;
+        // Sine waves for rolling hills
+        return (Math.sin(x * 0.02) * 15) + (Math.cos(z * 0.025) * 15) + (Math.sin(x * 0.05 + z * 0.05) * 5);
     }
 
-    // Create Ground Mesh with Segments
-    const geometryGeo = new THREE.PlaneGeometry(CONFIG.worldSize * 1.2, CONFIG.worldSize * 1.2, 128, 128);
-    
-    // Deform vertices to match height function
-    const posAttribute = geometryGeo.attributes.position;
-    for (let i = 0; i < posAttribute.count; i++) {
-        const x = posAttribute.getX(i);
-        const y = posAttribute.getY(i); // This is actually Z in 3D space relative to plane
-        // Plane is rotated -90 X, so local (x, y) maps to world (x, z) roughly
-        // We will calculate height based on x, y (which becomes world x, z)
-        const height = getHeight(x, -y); 
-        posAttribute.setZ(i, height); // Set 'Z' because plane defaults to XY plane
+    const groundGeo = new THREE.PlaneGeometry(CONFIG.worldSize * 1.2, CONFIG.worldSize * 1.2, 100, 100);
+    const pos = groundGeo.attributes.position;
+    for (let i = 0; i < pos.count; i++) {
+        // Plane is initially XY, we rotate it later to XZ. 
+        // But getHeight expects World X,Z. 
+        // In PlaneGeometry, vertices are X, Y.
+        const x = pos.getX(i);
+        const y = pos.getY(i); 
+        // We will rotate X -> -90 deg. So Y becomes Z (world).
+        // Note: In ThreeJS PlaneGeometry, +Y is usually "Up" in texture space, which maps to -Z in world when rotated -90X
+        // Let's just calculate height and put it in Z (which becomes Y world after rotation? No.)
+        
+        // Simpler way: Displace Z here, then rotate mesh.
+        const h = getHeight(x, -y); // -y because texture coords are flipped relative to world Z usually
+        pos.setZ(i, h);
     }
-    
-    geometryGeo.computeVertexNormals(); // Recalculate lighting for hills
-    const groundMat = new THREE.MeshStandardMaterial({ 
-        color: 0x1a1a1a, 
-        roughness: 0.9,
-        side: THREE.DoubleSide
-    });
-    const ground = new THREE.Mesh(geometryGeo, groundMat);
+    groundGeo.computeVertexNormals();
+
+    const groundMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.9 });
+    const ground = new THREE.Mesh(groundGeo, groundMat);
     ground.rotation.x = -Math.PI / 2;
     ground.receiveShadow = true;
     scene.add(ground);
 
+    // Grid Helper for North Reference
+    const gridHelper = new THREE.GridHelper(CONFIG.worldSize, 20, 0x444444, 0x222222);
+    scene.add(gridHelper);
+
+    // --- WIND VISUALIZATION ---
+    // Arrow Helper
+    const windArrowDir = new THREE.Vector3(0, 0, -1); // Points North initially
+    const windArrowOrigin = new THREE.Vector3(0, 50, 0);
+    const windArrowLength = 30;
+    const windArrowColor = 0xff0000;
+    const windArrow = new THREE.ArrowHelper(windArrowDir, windArrowOrigin, windArrowLength, windArrowColor, 10, 5);
+    scene.add(windArrow);
 
     // --- TREES ---
-    // Instanced Mesh for performance
-    const treeGeo = new THREE.ConeGeometry(1, 4, 6);
-    treeGeo.translate(0, 2, 0); // Pivot at bottom
+    const treeGeo = new THREE.ConeGeometry(1.2, 5, 5);
+    treeGeo.translate(0, 2.5, 0);
     const treeMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.8, flatShading: true });
     const mesh = new THREE.InstancedMesh(treeGeo, treeMat, CONFIG.count);
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     scene.add(mesh);
 
-    // Simulation Data Arrays
-    const STRIDE = 6; // x, z, temp, state, fuel, scale
+    // Data
+    const STRIDE = 6;
     let simData = new Float32Array(CONFIG.count * STRIDE);
-    let grid = []; 
-    let gridCols = Math.ceil(CONFIG.worldSize / CONFIG.cellSize);
-    let gridRows = Math.ceil(CONFIG.worldSize / CONFIG.cellSize);
-    grid = new Array(gridCols * gridRows).fill(0).map(() => []);
+    let grid = new Array(Math.ceil(CONFIG.worldSize/CONFIG.cellSize) * Math.ceil(CONFIG.worldSize/CONFIG.cellSize)).fill(0).map(()=>[]);
+    let gridCols = Math.ceil(CONFIG.worldSize/CONFIG.cellSize);
+    let gridRows = Math.ceil(CONFIG.worldSize/CONFIG.cellSize);
 
     const dummy = new THREE.Object3D();
     const _color = new THREE.Color();
-    let wind = { x: 1, z: 0 };
-    let windSpeed = 20;
 
-    // Initialize World
     function initWorld() {
-        for (let i = 0; i < CONFIG.count; i++) {
+        for(let i=0; i<CONFIG.count; i++) {
             const idx = i * STRIDE;
-            
-            // Random Pos
             const x = (Math.random() - 0.5) * CONFIG.worldSize;
             const z = (Math.random() - 0.5) * CONFIG.worldSize;
-            const y = getHeight(x, z); // Get height of terrain at this spot
+            const y = getHeight(x, z);
 
             simData[idx] = x;
             simData[idx+1] = z;
             simData[idx+2] = 0; // Temp
-            simData[idx+3] = S_NORMAL; 
-            simData[idx+4] = CONFIG.fireDuration;
-            simData[idx+5] = 1.0; // Scale
+            simData[idx+3] = S_NORMAL;
+            simData[idx+4] = CONFIG.fireDuration; // Fuel
+            simData[idx+5] = 0.5 + Math.random(); // Scale
 
-            // Position Tree on the Hill
             dummy.position.set(x, y, z);
-            
-            // Randomize size slightly
-            const s = CONFIG.treeScale * (0.8 + Math.random() * 0.4);
+            const s = simData[idx+5] * 1.5;
             dummy.scale.set(s, s, s);
-            
-            // Align to "Up" (Simple) or Normal (Complex - skipping for perf)
-            dummy.rotation.y = Math.random() * Math.PI;
-
+            dummy.rotation.y = Math.random() * Math.PI * 2;
             dummy.updateMatrix();
             mesh.setMatrixAt(i, dummy.matrix);
             mesh.setColorAt(i, C_GREEN);
@@ -194,191 +202,207 @@
 
     initWorld();
 
-    // --- INTERACTION ---
+    // --- SIMULATION VARIABLES ---
+    let windVector = { x: 0, z: -1 }; // Default North
+    let windSpeed = 25;
+
+    // --- MOUSE INPUT ---
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
 
-    window.addEventListener('mousedown', (event) => {
-        if (event.button !== 0) return;
-        mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-        mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
-        raycaster.setFromCamera(mouse, camera);
-        const intersection = raycaster.intersectObject(mesh);
+    window.addEventListener('mousedown', (e) => {
+        if(e.target.tagName !== 'CANVAS') return;
+        mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+        mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
         
-        if (intersection.length > 0) {
-            const id = intersection[0].instanceId;
-            const idx = id * STRIDE;
-            // Ignite
-            igniteRadius(simData[idx], simData[idx+1], 20);
-        } else {
-            // Also allow clicking on ground to ignite area
-            const groundIntersect = raycaster.intersectObject(ground);
-            if (groundIntersect.length > 0) {
-                const pt = groundIntersect[0].point;
-                igniteRadius(pt.x, pt.z, 20);
-            }
+        raycaster.setFromCamera(mouse, camera);
+        
+        // Check Ground intersection (easier to click)
+        const intersects = raycaster.intersectObject(ground);
+        if(intersects.length > 0) {
+            igniteRadius(intersects[0].point.x, intersects[0].point.z, 25);
         }
     });
 
-    function igniteRadius(ox, oz, radius) {
-        const rSq = radius * radius;
+    function igniteRadius(ox, oz, r) {
+        const rSq = r*r;
         for(let i=0; i<CONFIG.count; i++) {
             const idx = i*STRIDE;
             const dx = simData[idx] - ox;
             const dz = simData[idx+1] - oz;
-            if (dx*dx + dz*dz < rSq) {
+            if(dx*dx + dz*dz < rSq) {
                 simData[idx+3] = S_BURNING;
                 simData[idx+2] = CONFIG.igniteTemp + 10;
             }
         }
     }
 
-    // --- SIMULATION LOOP ---
+    // --- SIM LOOP ---
     function updateSim() {
-        // Clear Grid
+        // 1. Clear Grid
         for(let i=0; i<grid.length; i++) grid[i].length = 0;
-        
-        let activeFires = 0;
-        const halfSize = CONFIG.worldSize / 2;
 
-        // Populate Grid
-        for (let i = 0; i < CONFIG.count; i++) {
-            const idx = i * STRIDE;
-            if (simData[idx+3] === S_BURNING) {
-                activeFires++;
-                let cx = Math.floor((simData[idx] + halfSize) / CONFIG.cellSize);
-                let cz = Math.floor((simData[idx+1] + halfSize) / CONFIG.cellSize);
-                if (cx >= 0 && cx < gridCols && cz >= 0 && cz < gridRows) {
-                    grid[cz * gridCols + cx].push(idx);
+        const half = CONFIG.worldSize / 2;
+        
+        // 2. Build Grid
+        for(let i=0; i<CONFIG.count; i++) {
+            const idx = i*STRIDE;
+            if(simData[idx+3] === S_BURNING) {
+                let cx = Math.floor((simData[idx] + half) / CONFIG.cellSize);
+                let cz = Math.floor((simData[idx+1] + half) / CONFIG.cellSize);
+                if(cx>=0 && cx<gridCols && cz>=0 && cz<gridRows) {
+                    grid[cz*gridCols + cx].push(idx);
                 }
             }
         }
-        document.getElementById('fireCount').innerText = activeFires;
 
-        // Process Trees
-        const windX = wind.x * (windSpeed * 0.05); // Slower wind influence
-        const windZ = wind.z * (windSpeed * 0.05);
+        // 3. Calc Wind Offset
+        // windVector points in direction fire travels.
+        // We shift the "Heat Source" in that direction.
+        // Trees DOWNWIND see the heat source closer to them.
+        const shiftX = windVector.x * windSpeed * CONFIG.baseWindInfluence;
+        const shiftZ = windVector.z * windSpeed * CONFIG.baseWindInfluence;
         const reachSq = (CONFIG.cellSize * 1.5) ** 2;
-        
-        let colorNeedsUpdate = false;
-        let matrixNeedsUpdate = false;
 
-        for (let i = 0; i < CONFIG.count; i++) {
-            const idx = i * STRIDE;
-            let state = simData[idx+3];
-            if (state === S_BURNT) continue;
+        let needsUpdate = false;
 
-            if (state === S_BURNING) {
-                simData[idx+4] -= 1; // Burn fuel
+        for(let i=0; i<CONFIG.count; i++) {
+            const idx = i*STRIDE;
+            const state = simData[idx+3];
+
+            if(state === S_BURNT) continue;
+
+            if(state === S_BURNING) {
+                simData[idx+4]--; // Fuel
                 
                 // Flicker
-                if (Math.random() > 0.7) {
-                    _color.copy(C_RED).multiplyScalar(0.7 + Math.random() * 0.6);
+                if(Math.random() > 0.8) {
+                    _color.setHSL(0.05 + Math.random()*0.05, 1.0, 0.5); // Orange/Red
                     mesh.setColorAt(i, _color);
-                    colorNeedsUpdate = true;
+                    needsUpdate = true;
                 }
 
-                if (simData[idx+4] <= 0) {
+                if(simData[idx+4] <= 0) {
                     simData[idx+3] = S_BURNT;
                     mesh.setColorAt(i, C_BLACK);
                     
-                    // Shrink to ash
+                    // Shrink
                     const x = simData[idx];
                     const z = simData[idx+1];
-                    const y = getHeight(x, z); // Get Y again to update matrix correctly
-                    
-                    dummy.position.set(x, y, z);
-                    dummy.scale.set(1, 0.1, 1);
+                    const y = getHeight(x,z);
+                    dummy.position.set(x,y,z);
+                    dummy.scale.set(0.5, 0.1, 0.5);
                     dummy.updateMatrix();
                     mesh.setMatrixAt(i, dummy.matrix);
                     
-                    matrixNeedsUpdate = true;
-                    colorNeedsUpdate = true;
+                    mesh.instanceMatrix.needsUpdate = true;
+                    needsUpdate = true;
                 }
             }
             else {
                 // Heating
-                let cx = Math.floor((simData[idx] + halfSize) / CONFIG.cellSize);
-                let cz = Math.floor((simData[idx+1] + halfSize) / CONFIG.cellSize);
+                let cx = Math.floor((simData[idx] + half) / CONFIG.cellSize);
+                let cz = Math.floor((simData[idx+1] + half) / CONFIG.cellSize);
                 let heat = 0;
 
                 for(let nz = cz-1; nz <= cz+1; nz++) {
                     for(let nx = cx-1; nx <= cx+1; nx++) {
-                        if (nx >= 0 && nx < gridCols && nz >= 0 && nz < gridRows) {
+                        if(nx>=0 && nx<gridCols && nz>=0 && nz<gridRows) {
                             const cell = grid[nz * gridCols + nx];
                             for(let k=0; k<cell.length; k++) {
                                 const fIdx = cell[k];
-                                const ex = simData[fIdx] + windX;
-                                const ez = simData[fIdx+1] + windZ;
+                                // Fire position + Wind Shift
+                                const fx = simData[fIdx] + shiftX;
+                                const fz = simData[fIdx+1] + shiftZ;
+
+                                const distSq = (simData[idx] - fx)**2 + (simData[idx+1] - fz)**2;
                                 
-                                const distSq = (simData[idx] - ex)**2 + (simData[idx+1] - ez)**2;
-                                if (distSq < reachSq) {
-                                    heat += CONFIG.heatTransfer;
+                                if(distSq < reachSq) {
+                                    // Heat falls off with distance
+                                    heat += CONFIG.heatTransfer * (1 - distSq/reachSq);
                                 }
                             }
                         }
                     }
                 }
 
-                if (heat > 0) {
+                if(heat > 0) {
                     simData[idx+2] += heat;
-                    
-                    if (state === S_NORMAL) {
+                    if(state === S_NORMAL) {
                         simData[idx+3] = S_HEATING;
                         mesh.setColorAt(i, C_YELLOW);
-                        colorNeedsUpdate = true;
+                        needsUpdate = true;
                     }
-                    if (simData[idx+2] > CONFIG.igniteTemp) {
+                    if(simData[idx+2] > CONFIG.igniteTemp) {
                         simData[idx+3] = S_BURNING;
                         mesh.setColorAt(i, C_RED);
-                        colorNeedsUpdate = true;
-                    }
-                } else {
-                    // Cooling
-                    if (simData[idx+2] > 0) simData[idx+2] -= 0.1;
-                    if (state === S_HEATING && simData[idx+2] < 10) {
-                        simData[idx+3] = S_NORMAL;
-                        mesh.setColorAt(i, C_GREEN);
-                        colorNeedsUpdate = true;
+                        needsUpdate = true;
                     }
                 }
             }
         }
-
-        if (colorNeedsUpdate) mesh.instanceColor.needsUpdate = true;
-        if (matrixNeedsUpdate) mesh.instanceMatrix.needsUpdate = true;
+        if(needsUpdate) mesh.instanceColor.needsUpdate = true;
     }
 
-    // --- UI & EVENTS ---
+    // --- UI LOGIC ---
     function updateWind() {
-        const d = document.getElementById('windDir').value;
-        const s = document.getElementById('windSpeed').value;
-        document.getElementById('windDirVal').innerText = d + "°";
-        document.getElementById('windSpeedVal').innerText = s;
-        windSpeed = parseFloat(s);
-        const rad = d * (Math.PI / 180);
-        wind.x = Math.sin(rad);
-        wind.z = Math.cos(rad);
+        const deg = parseFloat(document.getElementById('windDir').value);
+        windSpeed = parseFloat(document.getElementById('windSpeed').value);
+        
+        // Map Degrees to Vector
+        // 0 = North (-Z)
+        // 90 = East (+X)
+        // 180 = South (+Z)
+        // 270 = West (-X)
+        
+        // To convert Angle to X/Z:
+        // Rad = (deg - 90) * PI/180 ? No.
+        // Let's use standard Trig rotated -90.
+        // x = sin(deg), z = -cos(deg)
+        // 0: sin(0)=0, -cos(0)=-1 -> (0, -1) [North] Correct.
+        // 90: sin(90)=1, -cos(90)=0 -> (1, 0) [East] Correct.
+        
+        const rad = deg * (Math.PI / 180);
+        windVector.x = Math.sin(rad);
+        windVector.z = -Math.cos(rad);
+
+        // Update Text
+        let dirTxt = "N";
+        if(deg > 22 && deg < 67) dirTxt = "NE";
+        else if(deg >= 67 && deg < 112) dirTxt = "E";
+        else if(deg >= 112 && deg < 157) dirTxt = "SE";
+        else if(deg >= 157 && deg < 202) dirTxt = "S";
+        else if(deg >= 202 && deg < 247) dirTxt = "SW";
+        else if(deg >= 247 && deg < 292) dirTxt = "W";
+        else if(deg >= 292 && deg < 337) dirTxt = "NW";
+
+        document.getElementById('windDirVal').innerText = deg + "° (" + dirTxt + ")";
+        document.getElementById('windSpeedVal').innerText = windSpeed;
+
+        // Update 3D Arrow
+        windArrow.setDirection(new THREE.Vector3(windVector.x, 0, windVector.z));
+        windArrow.setLength(20 + windSpeed * 0.5);
     }
 
     document.getElementById('windDir').addEventListener('input', updateWind);
     document.getElementById('windSpeed').addEventListener('input', updateWind);
     document.getElementById('resetBtn').addEventListener('click', initWorld);
+
     window.addEventListener('resize', () => {
-        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.aspect = window.innerWidth/window.innerHeight;
         camera.updateProjectionMatrix();
         renderer.setSize(window.innerWidth, window.innerHeight);
     });
 
     updateWind();
 
-    function animate() {
-        requestAnimationFrame(animate);
+    function loop() {
+        requestAnimationFrame(loop);
         updateSim();
         controls.update();
         renderer.render(scene, camera);
     }
-    animate();
+    loop();
 
 </script>
 </body>
