@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Massive Wildfire Sim (Speed Control)</title>
+    <title>Wildfire Sim: Precision Tools</title>
     <style>
         body { margin: 0; overflow: hidden; background: #eef0f5; font-family: 'Segoe UI', sans-serif; }
         
@@ -67,10 +67,10 @@
 </head>
 <body>
 
-<div id="loading">Generating 100,000 Fuel Nodes (Massive Map)...</div>
+<div id="loading">Generating 100,000 Fuel Nodes...</div>
 
 <div id="ui">
-    <h3>DFRP Advanced WildFire Simulator</h3>
+    <h3>Advanced Fire Physics</h3>
     
     <div class="control">
         <label>Simulation Speed <span id="simSpeedVal" class="val">1.0x</span></label>
@@ -103,8 +103,8 @@
 </div>
 
 <div id="toolbar">
-    <div class="tool active" id="toolIgnite" title="Ignite Fire">🔥</div>
-    <div class="tool" id="toolCut" title="Cut Firebreak (Precision)">🪓</div>
+    <div class="tool active" id="toolIgnite" title="Ignite Single Tree">🔥</div>
+    <div class="tool" id="toolCut" title="Precision Firebreak">🪓</div>
 </div>
 
 <script type="module">
@@ -113,8 +113,8 @@
 
     // --- CONFIGURATION ---
     const CONFIG = {
-        count: 100000,          // INCREASED from 65k to 100k
-        worldSize: 1500,        // INCREASED from 1000 to 1500 (50% larger dimension)
+        count: 100000,          
+        worldSize: 1500,        
         cellSize: 20,
         baseSpreadRate: 0.05,
         dryingRate: 0.07,
@@ -146,7 +146,7 @@
     scene.background = new THREE.Color(0xeef0f5);
 
     const camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 5, 6000);
-    camera.position.set(0, 1600, 1300); // Adjusted for larger map
+    camera.position.set(0, 1600, 1300);
     
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
@@ -165,7 +165,6 @@
     const sun = new THREE.DirectionalLight(0xffaa33, 1.2);
     sun.position.set(400, 700, 300);
     sun.castShadow = true;
-    // Massive Shadow Map for 100k trees
     sun.shadow.mapSize.set(4096, 4096); 
     sun.shadow.camera.left = -900; sun.shadow.camera.right = 900;
     sun.shadow.camera.top = 900; sun.shadow.camera.bottom = -900;
@@ -177,7 +176,7 @@
     }
 
     function isRiver(x, z) {
-        const center = Math.sin(z * 0.003) * 80 - 300; // Shifted logic for larger map
+        const center = Math.sin(z * 0.003) * 80 - 300; 
         return Math.abs(x - center) < 25;
     }
 
@@ -193,7 +192,7 @@
         return F_BRUSH; 
     }
 
-    // --- GROUND MESH (1800x1800 for safety) ---
+    // --- GROUND MESH ---
     const groundGeo = new THREE.PlaneGeometry(1800, 1800, 300, 300);
     const count = groundGeo.attributes.position.count;
     groundGeo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(count * 3), 3));
@@ -254,6 +253,7 @@
     const _pos = new THREE.Vector3();
     const _scale = new THREE.Vector3();
     const _quat = new THREE.Quaternion();
+    const _col = new THREE.Color();
     
     let windVec = { x: 0, z: -1 };
     let windSpeed = 25;
@@ -328,29 +328,46 @@
         if(hits.length > 0) {
             const pt = hits[0].point;
             if(currentTool === 'ignite') {
-                if(!isRiver(pt.x, pt.z)) ignite(pt.x, pt.z);
+                if(!isRiver(pt.x, pt.z)) igniteOne(pt.x, pt.z);
             } else if(currentTool === 'cut') {
                 cutLine(pt.x, pt.z);
             }
         }
     }
 
-    function ignite(ox, oz) {
+    // IGNITE ONE: Finds nearest tree
+    function igniteOne(ox, oz) {
+        let closestIdx = -1;
+        let minDistSq = Infinity;
+        const searchRadiusSq = 900; // Search within 30 units
+
         for(let i=0; i<CONFIG.count; i++) {
             const idx = i*STRIDE;
-            if(data[idx+6] < -50) continue; 
+            if(data[idx+6] < -50) continue; // Skip hidden/dead
+
             const dx = data[idx]-ox;
             const dz = data[idx+1]-oz;
-            if(dx*dx + dz*dz < 1600) { // Larger ignition brush for big map
-                data[idx+2] = S_BURNING;
-                data[idx+3] = 0; 
+            const dSq = dx*dx + dz*dz;
+
+            if(dSq < searchRadiusSq) {
+                if(dSq < minDistSq) {
+                    minDistSq = dSq;
+                    closestIdx = idx;
+                }
             }
+        }
+
+        // Ignite closest only
+        if(closestIdx !== -1) {
+            data[closestIdx+2] = S_BURNING;
+            data[closestIdx+3] = 0;
         }
     }
 
     function cutLine(ox, oz) {
         let needsUpdate = false;
-        const radiusSq = 225; 
+        // REDUCED BRUSH SIZE by 50% again (Radius ~7.5)
+        const radiusSq = 56; 
         for(let i=0; i<CONFIG.count; i++) {
             const idx = i*STRIDE;
             if(data[idx+6] < -50) continue;
@@ -386,7 +403,6 @@
 
         let needColor = false;
         let needMatrix = false;
-        const _col = new THREE.Color();
 
         for(let i=0; i<CONFIG.count; i++) {
             const idx = i * STRIDE;
@@ -395,7 +411,6 @@
             if(state === S_CHARRED || state === S_CUT) continue;
 
             if(state === S_BURNING) {
-                // Apply Speed Multiplier to Burn Rate
                 data[idx+4] -= 1.0 * simSpeedMultiplier; 
                 
                 if(data[idx+4] <= 0) {
@@ -405,7 +420,6 @@
                     const type = data[idx+7];
                     const props = FUEL_PROPS[type];
                     _pos.set(data[idx], data[idx+6], data[idx+1]);
-                    // Charred remains
                     _scale.set(props.scaleXZ, 0.1, props.scaleXZ);
                     _quat.set(0,0,0,1);
                     _mat.compose(_pos, _quat, _scale);
@@ -478,7 +492,6 @@
 
                             const intensity = (1.0 - dist/30) * windBias * slopeFactor * spreadMod; 
                             
-                            // Apply Speed Multiplier to Spread Calculation
                             if(intensity > 0) incomingHeat += intensity * CONFIG.baseSpreadRate * simSpeedMultiplier;
                         }
                     }
@@ -486,9 +499,7 @@
             }
 
             if(incomingHeat > 0) {
-                // Apply Speed Multiplier to Drying
-                data[idx+3] -= incomingHeat * CONFIG.dryingRate; // Already factored into incomingHeat above? No, intensity * speed. So drying is faster.
-                
+                data[idx+3] -= incomingHeat * CONFIG.dryingRate; 
                 if(state === S_LIVE && data[idx+3] < baseMoisture * 5) {
                     data[idx+2] = S_DRYING;
                     mesh.setColorAt(i, new THREE.Color(0xb8860b)); 
