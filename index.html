@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>3D Fire Simulation (Three.js)</title>
+    <title>3D Fire Simulation (Hills)</title>
     <style>
         body { margin: 0; overflow: hidden; background: #000; font-family: sans-serif; }
         #ui {
@@ -32,7 +32,7 @@
 <body>
 
 <div id="ui">
-    <h3 style="margin-top:0">Forest Fire 3D</h3>
+    <h3 style="margin-top:0">Forest Fire (Hills)</h3>
     <div class="control">
         <label>Wind Direction</label>
         <input type="range" id="windDir" min="0" max="360" value="90">
@@ -59,22 +59,16 @@
 
     // --- CONFIGURATION ---
     const CONFIG = {
-        count: 15000,
+        count: 12000,           // Number of trees
         worldSize: 400,
         treeScale: 1.5,
         cellSize: 10,
         igniteTemp: 100,
-        fireDuration: 300, // Frames to burn
-        heatTransfer: 4.5
+        fireDuration: 600,      // SLOWED DOWN: Trees burn longer (was 300)
+        heatTransfer: 0.8       // SLOWED DOWN: Heat spreads slower (was 4.5)
     };
 
-    // States
-    const S_NORMAL = 0;
-    const S_HEATING = 1;
-    const S_BURNING = 2;
-    const S_BURNT = 3;
-
-    // Colors
+    const S_NORMAL = 0, S_HEATING = 1, S_BURNING = 2, S_BURNT = 3;
     const C_GREEN = new THREE.Color(0x2E8B57);
     const C_YELLOW = new THREE.Color(0xDDAA00);
     const C_RED = new THREE.Color(0xFF4500);
@@ -83,68 +77,87 @@
     // --- SCENE SETUP ---
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x202025);
-    scene.fog = new THREE.Fog(0x202025, 50, 300);
-
+    // REMOVED FOG per request
+    
     const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
-    camera.position.set(0, 100, 150);
+    camera.position.set(0, 150, 200);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true; // Enable shadows for depth
     document.body.appendChild(renderer.domElement);
 
-    // Controls
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
-    controls.dampingFactor = 0.05;
 
     // Lighting
-    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 1.0);
-    scene.add(hemiLight);
-    const dirLight = new THREE.DirectionalLight(0xffaa33, 1.5); // Orange sun
-    dirLight.position.set(50, 100, 50);
+    const ambientLight = new THREE.AmbientLight(0x404040, 2); // Soft white light
+    scene.add(ambientLight);
+    const dirLight = new THREE.DirectionalLight(0xffaa33, 2);
+    dirLight.position.set(100, 200, 50);
+    dirLight.castShadow = true;
     scene.add(dirLight);
 
-    // Ground
-    const groundGeo = new THREE.PlaneGeometry(CONFIG.worldSize * 1.5, CONFIG.worldSize * 1.5);
-    const groundMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.8 });
-    const ground = new THREE.Mesh(groundGeo, groundMat);
+    // --- TERRAIN GENERATION (Hills) ---
+    // Simple math function to create hills without external libraries
+    function getHeight(x, z) {
+        // Combine sine waves for rolling hills
+        const y1 = Math.sin(x * 0.02) * 20;
+        const y2 = Math.cos(z * 0.02) * 20;
+        const y3 = Math.sin(x * 0.05 + z * 0.05) * 10;
+        return y1 + y2 + y3;
+    }
+
+    // Create Ground Mesh with Segments
+    const geometryGeo = new THREE.PlaneGeometry(CONFIG.worldSize * 1.2, CONFIG.worldSize * 1.2, 128, 128);
+    
+    // Deform vertices to match height function
+    const posAttribute = geometryGeo.attributes.position;
+    for (let i = 0; i < posAttribute.count; i++) {
+        const x = posAttribute.getX(i);
+        const y = posAttribute.getY(i); // This is actually Z in 3D space relative to plane
+        // Plane is rotated -90 X, so local (x, y) maps to world (x, z) roughly
+        // We will calculate height based on x, y (which becomes world x, z)
+        const height = getHeight(x, -y); 
+        posAttribute.setZ(i, height); // Set 'Z' because plane defaults to XY plane
+    }
+    
+    geometryGeo.computeVertexNormals(); // Recalculate lighting for hills
+    const groundMat = new THREE.MeshStandardMaterial({ 
+        color: 0x1a1a1a, 
+        roughness: 0.9,
+        side: THREE.DoubleSide
+    });
+    const ground = new THREE.Mesh(geometryGeo, groundMat);
     ground.rotation.x = -Math.PI / 2;
-    ground.position.y = -0.5;
+    ground.receiveShadow = true;
     scene.add(ground);
 
-    // --- SIMULATION DATA ---
-    // We use a flat Float32Array for raw speed (Data Oriented Design)
-    // Structure per tree: [x, z, temp, state, fuel, scaleY]
-    const STRIDE = 6;
-    let simData = new Float32Array(CONFIG.count * STRIDE);
-    
-    // Spatial Hash Grid
-    let gridRows = Math.ceil(CONFIG.worldSize / CONFIG.cellSize);
-    let gridCols = Math.ceil(CONFIG.worldSize / CONFIG.cellSize);
-    let grid = new Array(gridRows * gridCols).fill(0).map(() => []);
 
-    // Instanced Mesh (The magic for 15k trees)
-    // Simple Low Poly Tree: Cone
-    const geometry = new THREE.ConeGeometry(1, 4, 6); 
-    geometry.translate(0, 2, 0); // Pivot at bottom
-    const material = new THREE.MeshStandardMaterial({ 
-        color: 0xffffff, 
-        roughness: 0.8,
-        flatShading: true
-    });
-    
-    const mesh = new THREE.InstancedMesh(geometry, material, CONFIG.count);
-    mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    // --- TREES ---
+    // Instanced Mesh for performance
+    const treeGeo = new THREE.ConeGeometry(1, 4, 6);
+    treeGeo.translate(0, 2, 0); // Pivot at bottom
+    const treeMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.8, flatShading: true });
+    const mesh = new THREE.InstancedMesh(treeGeo, treeMat, CONFIG.count);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
     scene.add(mesh);
+
+    // Simulation Data Arrays
+    const STRIDE = 6; // x, z, temp, state, fuel, scale
+    let simData = new Float32Array(CONFIG.count * STRIDE);
+    let grid = []; 
+    let gridCols = Math.ceil(CONFIG.worldSize / CONFIG.cellSize);
+    let gridRows = Math.ceil(CONFIG.worldSize / CONFIG.cellSize);
+    grid = new Array(gridCols * gridRows).fill(0).map(() => []);
 
     const dummy = new THREE.Object3D();
     const _color = new THREE.Color();
-
-    // Wind
     let wind = { x: 1, z: 0 };
     let windSpeed = 20;
 
-    // --- INIT ---
+    // Initialize World
     function initWorld() {
         for (let i = 0; i < CONFIG.count; i++) {
             const idx = i * STRIDE;
@@ -152,17 +165,25 @@
             // Random Pos
             const x = (Math.random() - 0.5) * CONFIG.worldSize;
             const z = (Math.random() - 0.5) * CONFIG.worldSize;
-            
+            const y = getHeight(x, z); // Get height of terrain at this spot
+
             simData[idx] = x;
             simData[idx+1] = z;
             simData[idx+2] = 0; // Temp
-            simData[idx+3] = S_NORMAL; // State
-            simData[idx+4] = CONFIG.fireDuration; // Fuel
+            simData[idx+3] = S_NORMAL; 
+            simData[idx+4] = CONFIG.fireDuration;
             simData[idx+5] = 1.0; // Scale
 
-            // Set Initial Transform
-            dummy.position.set(x, 0, z);
-            dummy.scale.set(CONFIG.treeScale, CONFIG.treeScale * (0.8 + Math.random()*0.4), CONFIG.treeScale);
+            // Position Tree on the Hill
+            dummy.position.set(x, y, z);
+            
+            // Randomize size slightly
+            const s = CONFIG.treeScale * (0.8 + Math.random() * 0.4);
+            dummy.scale.set(s, s, s);
+            
+            // Align to "Up" (Simple) or Normal (Complex - skipping for perf)
+            dummy.rotation.y = Math.random() * Math.PI;
+
             dummy.updateMatrix();
             mesh.setMatrixAt(i, dummy.matrix);
             mesh.setColorAt(i, C_GREEN);
@@ -173,31 +194,29 @@
 
     initWorld();
 
-    // --- RAYCASTER (Mouse Click) ---
+    // --- INTERACTION ---
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
 
     window.addEventListener('mousedown', (event) => {
-        if (event.button !== 0) return; // Left click only
-
+        if (event.button !== 0) return;
         mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
         mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
-
         raycaster.setFromCamera(mouse, camera);
-        
-        // Raycast against the InstancedMesh
         const intersection = raycaster.intersectObject(mesh);
         
         if (intersection.length > 0) {
-            const instanceId = intersection[0].instanceId;
-            const idx = instanceId * STRIDE;
-            
-            // Ignite specific tree
-            simData[idx+2] = CONFIG.igniteTemp + 50; 
-            simData[idx+3] = S_BURNING;
-            
-            // Ignite neighbors (Explosion effect)
-            igniteRadius(simData[idx], simData[idx+1], 15);
+            const id = intersection[0].instanceId;
+            const idx = id * STRIDE;
+            // Ignite
+            igniteRadius(simData[idx], simData[idx+1], 20);
+        } else {
+            // Also allow clicking on ground to ignite area
+            const groundIntersect = raycaster.intersectObject(ground);
+            if (groundIntersect.length > 0) {
+                const pt = groundIntersect[0].point;
+                igniteRadius(pt.x, pt.z, 20);
+            }
         }
     });
 
@@ -216,23 +235,19 @@
 
     // --- SIMULATION LOOP ---
     function updateSim() {
-        // 1. Clear Grid
+        // Clear Grid
         for(let i=0; i<grid.length; i++) grid[i].length = 0;
-        let activeFires = 0;
-
-        // 2. Build Grid & Count Fires
-        const halfSize = CONFIG.worldSize / 2;
         
+        let activeFires = 0;
+        const halfSize = CONFIG.worldSize / 2;
+
+        // Populate Grid
         for (let i = 0; i < CONFIG.count; i++) {
             const idx = i * STRIDE;
             if (simData[idx+3] === S_BURNING) {
                 activeFires++;
-                // Map world coord to grid coord
-                // (x + half) because grid array index must be positive
                 let cx = Math.floor((simData[idx] + halfSize) / CONFIG.cellSize);
                 let cz = Math.floor((simData[idx+1] + halfSize) / CONFIG.cellSize);
-                
-                // Clamp
                 if (cx >= 0 && cx < gridCols && cz >= 0 && cz < gridRows) {
                     grid[cz * gridCols + cx].push(idx);
                 }
@@ -240,9 +255,9 @@
         }
         document.getElementById('fireCount').innerText = activeFires;
 
-        // 3. Process Trees
-        const windX = wind.x * (windSpeed * 0.1);
-        const windZ = wind.z * (windSpeed * 0.1);
+        // Process Trees
+        const windX = wind.x * (windSpeed * 0.05); // Slower wind influence
+        const windZ = wind.z * (windSpeed * 0.05);
         const reachSq = (CONFIG.cellSize * 1.5) ** 2;
         
         let colorNeedsUpdate = false;
@@ -251,17 +266,14 @@
         for (let i = 0; i < CONFIG.count; i++) {
             const idx = i * STRIDE;
             let state = simData[idx+3];
-
-            if (state === S_BURNT) continue; // Dead
+            if (state === S_BURNT) continue;
 
             if (state === S_BURNING) {
-                // Consume fuel
-                simData[idx+4] -= 1; // burn rate
+                simData[idx+4] -= 1; // Burn fuel
                 
-                // FLICKER EFFECT
-                // Randomly change color slightly to simulate fire animation
-                if (Math.random() > 0.5) {
-                    _color.copy(C_RED).multiplyScalar(0.8 + Math.random() * 0.5);
+                // Flicker
+                if (Math.random() > 0.7) {
+                    _color.copy(C_RED).multiplyScalar(0.7 + Math.random() * 0.6);
                     mesh.setColorAt(i, _color);
                     colorNeedsUpdate = true;
                 }
@@ -270,42 +282,37 @@
                     simData[idx+3] = S_BURNT;
                     mesh.setColorAt(i, C_BLACK);
                     
-                    // Shrink mesh
-                    dummy.position.set(simData[idx], 0, simData[idx+1]);
-                    dummy.scale.set(CONFIG.treeScale, CONFIG.treeScale * 0.1, CONFIG.treeScale); // Stump
+                    // Shrink to ash
+                    const x = simData[idx];
+                    const z = simData[idx+1];
+                    const y = getHeight(x, z); // Get Y again to update matrix correctly
+                    
+                    dummy.position.set(x, y, z);
+                    dummy.scale.set(1, 0.1, 1);
                     dummy.updateMatrix();
                     mesh.setMatrixAt(i, dummy.matrix);
+                    
                     matrixNeedsUpdate = true;
                     colorNeedsUpdate = true;
                 }
             }
             else {
-                // Heating Logic
-                const x = simData[idx];
-                const z = simData[idx+1];
-                let cx = Math.floor((x + halfSize) / CONFIG.cellSize);
-                let cz = Math.floor((z + halfSize) / CONFIG.cellSize);
-
+                // Heating
+                let cx = Math.floor((simData[idx] + halfSize) / CONFIG.cellSize);
+                let cz = Math.floor((simData[idx+1] + halfSize) / CONFIG.cellSize);
                 let heat = 0;
 
-                // Check Neighbors
                 for(let nz = cz-1; nz <= cz+1; nz++) {
                     for(let nx = cx-1; nx <= cx+1; nx++) {
                         if (nx >= 0 && nx < gridCols && nz >= 0 && nz < gridRows) {
                             const cell = grid[nz * gridCols + nx];
                             for(let k=0; k<cell.length; k++) {
                                 const fIdx = cell[k];
-                                // Fire Pos
-                                const fx = simData[fIdx];
-                                const fz = simData[fIdx+1];
+                                const ex = simData[fIdx] + windX;
+                                const ez = simData[fIdx+1] + windZ;
                                 
-                                // Wind Shifted Fire Center
-                                // The heat source is "blown" away from the actual tree
-                                const ex = fx + windX;
-                                const ez = fz + windZ;
-
-                                const dSq = (x - ex)**2 + (z - ez)**2;
-                                if (dSq < reachSq) {
+                                const distSq = (simData[idx] - ex)**2 + (simData[idx+1] - ez)**2;
+                                if (distSq < reachSq) {
                                     heat += CONFIG.heatTransfer;
                                 }
                             }
@@ -316,16 +323,22 @@
                 if (heat > 0) {
                     simData[idx+2] += heat;
                     
-                    // Visual Heating (Lerp Green -> Yellow)
                     if (state === S_NORMAL) {
                         simData[idx+3] = S_HEATING;
                         mesh.setColorAt(i, C_YELLOW);
                         colorNeedsUpdate = true;
                     }
-                    
                     if (simData[idx+2] > CONFIG.igniteTemp) {
                         simData[idx+3] = S_BURNING;
                         mesh.setColorAt(i, C_RED);
+                        colorNeedsUpdate = true;
+                    }
+                } else {
+                    // Cooling
+                    if (simData[idx+2] > 0) simData[idx+2] -= 0.1;
+                    if (state === S_HEATING && simData[idx+2] < 10) {
+                        simData[idx+3] = S_NORMAL;
+                        mesh.setColorAt(i, C_GREEN);
                         colorNeedsUpdate = true;
                     }
                 }
@@ -336,42 +349,35 @@
         if (matrixNeedsUpdate) mesh.instanceMatrix.needsUpdate = true;
     }
 
-    // --- UI EVENTS ---
+    // --- UI & EVENTS ---
     function updateWind() {
         const d = document.getElementById('windDir').value;
         const s = document.getElementById('windSpeed').value;
-        
         document.getElementById('windDirVal').innerText = d + "°";
         document.getElementById('windSpeedVal').innerText = s;
-
         windSpeed = parseFloat(s);
         const rad = d * (Math.PI / 180);
-        wind.x = Math.sin(rad); // In 3D, usually X/Z plane
+        wind.x = Math.sin(rad);
         wind.z = Math.cos(rad);
     }
 
     document.getElementById('windDir').addEventListener('input', updateWind);
     document.getElementById('windSpeed').addEventListener('input', updateWind);
     document.getElementById('resetBtn').addEventListener('click', initWorld);
-    
-    // Initial Wind
-    updateWind();
-
-    // --- ANIMATION LOOP ---
-    function animate() {
-        requestAnimationFrame(animate);
-        updateSim();
-        controls.update();
-        renderer.render(scene, camera);
-    }
-
-    // Handle Window Resize
     window.addEventListener('resize', () => {
         camera.aspect = window.innerWidth / window.innerHeight;
         camera.updateProjectionMatrix();
         renderer.setSize(window.innerWidth, window.innerHeight);
     });
 
+    updateWind();
+
+    function animate() {
+        requestAnimationFrame(animate);
+        updateSim();
+        controls.update();
+        renderer.render(scene, camera);
+    }
     animate();
 
 </script>
