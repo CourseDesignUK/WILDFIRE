@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Massive Wildfire Sim (1000x1000)</title>
+    <title>Wildfire Scientific Roadmap (1000x1000)</title>
     <style>
         body { margin: 0; overflow: hidden; background: #eef0f5; font-family: 'Segoe UI', sans-serif; }
         
@@ -10,8 +10,9 @@
             position: absolute; top: 10px; left: 10px;
             background: rgba(255, 255, 255, 0.95); color: #333;
             padding: 15px; border-radius: 8px; border: 1px solid #ccc;
-            width: 260px; user-select: none;
+            width: 280px; user-select: none;
             box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            max-height: 90vh; overflow-y: auto;
         }
 
         h3 { margin: 0 0 10px 0; color: #222; font-weight: 600; font-size: 16px; border-bottom: 2px solid #ddd; padding-bottom: 8px; }
@@ -30,6 +31,15 @@
 
         .val { color: #d32f2f; font-weight: 700; }
         
+        /* Scientific Note Styling */
+        .science-note {
+            margin-top: 20px; padding-top: 15px; border-top: 2px solid #ddd;
+            font-size: 11px; line-height: 1.4; color: #444;
+        }
+        .science-note h4 { margin: 0 0 8px 0; color: #d32f2f; font-size: 12px; }
+        .science-note ul { padding-left: 15px; margin: 0; }
+        .science-note li { margin-bottom: 8px; }
+
         #toolbar {
             position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
             display: flex; gap: 15px; background: white; padding: 12px 20px;
@@ -43,7 +53,6 @@
         .tool:hover { transform: scale(1.1); background: #f9f9f9; }
         .tool.active { border-color: #d32f2f; background: #fff0f0; transform: scale(1.15); box-shadow: 0 0 10px rgba(211, 47, 47, 0.3); }
 
-        /* Loading Overlay */
         #loading {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             background: #eef0f5; display: flex; justify-content: center; align-items: center;
@@ -62,7 +71,7 @@
 </head>
 <body>
 
-<div id="loading">Generating 65,000 Trees...</div>
+<div id="loading">Generating 65,000 Trees on Rugged Terrain...</div>
 
 <div id="ui">
     <h3>Massive Map Control</h3>
@@ -83,11 +92,19 @@
     </div>
 
     <button id="resetBtn">Regenerate Terrain</button>
+
+    <div class="science-note">
+        <h4>Next potential steps for scientific validation:</h4>
+        <ul>
+            <li><b>Fuel Models (Anderson/Scott & Burgan):</b> Implementing standard fuel types (e.g., Grass, Brush, Timber) to apply specific surface area-to-volume ratios and fuel loads.</li>
+            <li><b>Slope Factor (ϕs):</b> Incorporating the effect of terrain, as fires spread faster uphill.</li>
+        </ul>
+    </div>
 </div>
 
 <div id="toolbar">
     <div class="tool active" id="toolIgnite" title="Ignite Fire">🔥</div>
-    <div class="tool" id="toolCut" title="Cut Firebreak">🪓</div>
+    <div class="tool" id="toolCut" title="Cut Firebreak (Precision)">🪓</div>
 </div>
 
 <script type="module">
@@ -96,12 +113,13 @@
 
     // --- CONFIGURATION ---
     const CONFIG = {
-        count: 65000,          // INCREASED from 18k to 65k
-        worldSize: 1000,       // INCREASED from 500 to 1000 (Area is 4x larger)
+        count: 65000,          
+        worldSize: 1000,       
         cellSize: 20,
-        baseSpreadRate: 0.1,   // Slight boost for larger map feel
-        dryingRate: 0.15,
-        burnDuration: 1500,
+        // SPEED REDUCED BY 50%
+        baseSpreadRate: 0.05,   // Was 0.1
+        dryingRate: 0.07,       // Was 0.15
+        burnDuration: 3000,     // Was 1500 (Lasts longer)
     };
 
     const S_LIVE = 0;
@@ -115,10 +133,11 @@
     // --- SCENE ---
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0xeef0f5);
-    scene.fog = new THREE.FogExp2(0xeef0f5, 0.0008); // Reduced fog density for viewing distance
+    // REMOVED FOG per request
+    // scene.fog = new THREE.FogExp2(0xeef0f5, 0.0008); 
 
-    const camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 5, 3000);
-    camera.position.set(0, 900, 700); // Moved camera much higher/further back
+    const camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 5, 5000);
+    camera.position.set(0, 1100, 900); 
     
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
@@ -129,7 +148,7 @@
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.maxPolarAngle = Math.PI / 2 - 0.05;
-    controls.maxDistance = 2000;
+    controls.maxDistance = 2500;
 
     // --- LIGHTING ---
     const hemiLight = new THREE.HemisphereLight(0xffffff, 0xffffff, 0.6);
@@ -137,32 +156,29 @@
     const sun = new THREE.DirectionalLight(0xffaa33, 1.2);
     sun.position.set(300, 500, 200);
     sun.castShadow = true;
-    // Expanded shadow map coverage
     sun.shadow.mapSize.set(4096, 4096); 
     sun.shadow.camera.left = -600; sun.shadow.camera.right = 600;
     sun.shadow.camera.top = 600; sun.shadow.camera.bottom = -600;
     scene.add(sun);
 
-    // --- TERRAIN GENERATION ---
+    // --- TERRAIN GENERATION (Undulating) ---
     function getElevation(x, z) {
-        // Larger scale noise for larger world
-        return Math.sin(x*0.008)*8 + Math.cos(z*0.006)*8 + Math.sin(x*0.015 + z*0.015)*4;
+        // AMPLITUDE INCREASED for more undulation (x2.5 approx)
+        return Math.sin(x*0.008)*25 + Math.cos(z*0.006)*25 + Math.sin(x*0.015 + z*0.015)*12;
     }
 
     function isRiver(x, z) {
-        // Wider meandering river
         const center = Math.sin(z * 0.005) * 60 - 200;
         return Math.abs(x - center) < 20;
     }
 
     function isRoad(x, z) {
-        // Long winding road on the right
         const center = Math.sin(z * 0.003) * 30 + 200;
         return Math.abs(x - center) < 12;
     }
 
-    // --- GROUND MESH (Expanded) ---
-    const groundGeo = new THREE.PlaneGeometry(1200, 1200, 200, 200);
+    // --- GROUND MESH ---
+    const groundGeo = new THREE.PlaneGeometry(1200, 1200, 250, 250); // Increased segments for smoothness
     const count = groundGeo.attributes.position.count;
     groundGeo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(count * 3), 3));
     
@@ -180,10 +196,10 @@
         _c.setHex(0x5c6b45); 
 
         if(isRiver(x, -y)) {
-            h = -4; // Deeper river
+            h = -15; // Deeper river due to higher terrain
             _c.setHex(0x4da6ff);
         } else if(isRoad(x, -y)) {
-            h = 0.5;
+            h += 0.5; // Road follows terrain
             _c.setHex(0x777777);
         }
 
@@ -198,11 +214,10 @@
     ground.receiveShadow = true;
     scene.add(ground);
 
-    const arrowHelper = new THREE.ArrowHelper(new THREE.Vector3(0,0,-1), new THREE.Vector3(0,50,0), 80, 0xd32f2f);
+    const arrowHelper = new THREE.ArrowHelper(new THREE.Vector3(0,0,-1), new THREE.Vector3(0,100,0), 80, 0xd32f2f);
     scene.add(arrowHelper);
 
-    // --- TREES (Instanced) ---
-    // Simpler geometry to handle 65k count
+    // --- TREES ---
     const treeGeo = new THREE.CylinderGeometry(0, 1.8, 7, 4); 
     treeGeo.translate(0, 3.5, 0);
     const treeMat = new THREE.MeshStandardMaterial({ color: 0xffffff, flatShading: true, roughness: 0.8 });
@@ -231,7 +246,6 @@
     function init() {
         document.getElementById('loading').style.display = 'flex';
         
-        // Delay to allow UI to render loading screen
         setTimeout(() => {
             spatialMap = new Array(mapDim*mapDim).fill(0).map(()=>[]);
             
@@ -259,6 +273,7 @@
                 _pos.set(x, y, z);
                 const s = data[idx+5];
                 _scale.set(s, s* (0.8+Math.random()*0.4), s);
+                // Align trees slightly to terrain normal could be better, but upright is fine for perf
                 _quat.setFromAxisAngle(new THREE.Vector3(0,1,0), Math.random()*Math.PI*2);
                 _mat.compose(_pos, _quat, _scale);
                 mesh.setMatrixAt(i, _mat);
@@ -305,7 +320,7 @@
             if(data[idx+6] < -50) continue; 
             const dx = data[idx]-ox;
             const dz = data[idx+1]-oz;
-            if(dx*dx + dz*dz < 900) { // Larger brush for big map
+            if(dx*dx + dz*dz < 900) { 
                 data[idx+2] = S_BURNING;
                 data[idx+3] = 0; 
             }
@@ -314,12 +329,16 @@
 
     function cutLine(ox, oz) {
         let needsUpdate = false;
+        // REDUCED BRUSH SIZE by 50% (Radius ~15 instead of 30)
+        // 15^2 = 225
+        const radiusSq = 225; 
+        
         for(let i=0; i<CONFIG.count; i++) {
             const idx = i*STRIDE;
             if(data[idx+6] < -50) continue;
             const dx = data[idx]-ox;
             const dz = data[idx+1]-oz;
-            if(dx*dx + dz*dz < 900) { 
+            if(dx*dx + dz*dz < radiusSq) { 
                 data[idx+2] = S_CUT;
                 _mat.makeScale(0,0,0);
                 mesh.setMatrixAt(i, _mat);
@@ -329,7 +348,7 @@
         if(needsUpdate) mesh.instanceMatrix.needsUpdate = true;
     }
 
-    // --- PHYSICS (Optimized for 65k) ---
+    // --- PHYSICS ---
     function updatePhysics() {
         for(let i=0; i<spatialMap.length; i++) spatialMap[i].length = 0;
         
@@ -345,7 +364,6 @@
             }
         }
 
-        // Optimization: Skip physics if no fire
         if(burningCount === 0) return;
 
         let needColor = false;
@@ -369,7 +387,7 @@
                     mesh.setMatrixAt(i, _mat);
                     needColor = true; needMatrix = true;
                 } else {
-                    if(Math.random() > 0.9) { // Reduced flicker frequency for performance
+                    if(Math.random() > 0.92) { 
                         const flicker = 0.5 + Math.random()*0.5;
                         _col.setHSL(0.05 + Math.random()*0.05, 1.0, flicker * 0.6);
                         mesh.setColorAt(i, _col);
@@ -387,7 +405,6 @@
             
             let incomingHeat = 0;
 
-            // Loop optimization: Only check if center or neighbors have fire
             let neighborsHaveFire = false;
              for(let nz = gz-1; nz <= gz+1; nz++) {
                 for(let nx = gx-1; nx <= gx+1; nx++) {
