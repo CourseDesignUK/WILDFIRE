@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Wildfire Scientific Roadmap (Fixed River/Road)</title>
+    <title>Wildfire Sim: Fuel Models & Slope</title>
     <style>
         body { margin: 0; overflow: hidden; background: #eef0f5; font-family: 'Segoe UI', sans-serif; }
         
@@ -10,7 +10,7 @@
             position: absolute; top: 10px; left: 10px;
             background: rgba(255, 255, 255, 0.95); color: #333;
             padding: 15px; border-radius: 8px; border: 1px solid #ccc;
-            width: 280px; user-select: none;
+            width: 290px; user-select: none;
             box-shadow: 0 4px 15px rgba(0,0,0,0.1);
             max-height: 90vh; overflow-y: auto;
         }
@@ -31,14 +31,10 @@
 
         .val { color: #d32f2f; font-weight: 700; }
         
-        /* Scientific Note Styling */
-        .science-note {
-            margin-top: 20px; padding-top: 15px; border-top: 2px solid #ddd;
-            font-size: 11px; line-height: 1.4; color: #444;
-        }
-        .science-note h4 { margin: 0 0 8px 0; color: #d32f2f; font-size: 12px; }
-        .science-note ul { padding-left: 15px; margin: 0; }
-        .science-note li { margin-bottom: 8px; }
+        /* Legend */
+        .legend { margin-top: 10px; border-top: 1px solid #eee; padding-top: 10px; font-size: 11px; }
+        .l-item { display: flex; align-items: center; margin-bottom: 4px; }
+        .box { width: 10px; height: 10px; margin-right: 8px; border-radius: 2px; }
 
         #toolbar {
             position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
@@ -71,10 +67,10 @@
 </head>
 <body>
 
-<div id="loading">Generating 65,000 Trees on Rugged Terrain...</div>
+<div id="loading">Generating 65,000 Fuel Nodes (Slope & Biomes)...</div>
 
 <div id="ui">
-    <h3>Massive Map Control</h3>
+    <h3>Advanced Fire Physics</h3>
     
     <div class="control">
         <label>Wind Heading <span id="windDirVal" class="val">0° (N)</span></label>
@@ -93,12 +89,14 @@
 
     <button id="resetBtn">Regenerate Terrain</button>
 
-    <div class="science-note">
-        <h4>Next potential steps for scientific validation:</h4>
-        <ul>
-            <li><b>Fuel Models (Anderson/Scott & Burgan):</b> Implementing standard fuel types (e.g., Grass, Brush, Timber) to apply specific surface area-to-volume ratios and fuel loads.</li>
-            <li><b>Slope Factor (ϕs):</b> Incorporating the effect of terrain, as fires spread faster uphill.</li>
-        </ul>
+    <div class="legend">
+        <strong>Fuel Models (Anderson):</strong>
+        <div class="l-item"><div class="box" style="background:#7cfc00"></div>Grass (Fast/Low Intensity)</div>
+        <div class="l-item"><div class="box" style="background:#556b2f"></div>Brush (Medium)</div>
+        <div class="l-item"><div class="box" style="background:#004d00"></div>Timber (Slow/High Intensity)</div>
+        <div style="margin-top:5px; color: #666; font-style:italic;">
+            * Fire spreads faster uphill.
+        </div>
     </div>
 </div>
 
@@ -118,14 +116,26 @@
         cellSize: 20,
         baseSpreadRate: 0.05,
         dryingRate: 0.07,
-        burnDuration: 3000,
     };
 
+    // States
     const S_LIVE = 0;
     const S_DRYING = 1;
     const S_BURNING = 2;
     const S_CHARRED = 3;
     const S_CUT = 4;
+
+    // Fuel Types
+    const F_GRASS = 0;
+    const F_BRUSH = 1;
+    const F_TIMBER = 2;
+
+    // Fuel Properties (Spread Multiplier, Burn Duration Multiplier, Visual Scale)
+    const FUEL_PROPS = {
+        [F_GRASS]:  { spread: 2.5, burn: 0.4,  scaleY: 0.3, scaleXZ: 0.6, col: 0x7cfc00 }, // Fast, short burn
+        [F_BRUSH]:  { spread: 1.0, burn: 1.0,  scaleY: 0.8, scaleXZ: 1.0, col: 0x556b2f }, // Medium
+        [F_TIMBER]: { spread: 0.4, burn: 3.5,  scaleY: 1.8, scaleXZ: 1.2, col: 0x004d00 }  // Slow, intense
+    };
 
     let currentTool = 'ignite';
 
@@ -160,8 +170,8 @@
 
     // --- TERRAIN GENERATION (Undulating) ---
     function getElevation(x, z) {
-        // High Amplitude Noise
-        return Math.sin(x*0.008)*25 + Math.cos(z*0.006)*25 + Math.sin(x*0.015 + z*0.015)*12;
+        // High Amplitude Noise for distinct slopes
+        return Math.sin(x*0.008)*30 + Math.cos(z*0.006)*30 + Math.sin(x*0.015 + z*0.015)*15;
     }
 
     function isRiver(x, z) {
@@ -171,8 +181,16 @@
 
     function isRoad(x, z) {
         const center = Math.sin(z * 0.003) * 30 + 200;
-        // REDUCED WIDTH: Was 12, now 6
+        // Narrow road (6 width)
         return Math.abs(x - center) < 6; 
+    }
+
+    function getFuelType(x, z) {
+        // Noise to distribute fuel types
+        const n = Math.sin(x*0.004) + Math.cos(z*0.004); // Low freq noise
+        if (n > 0.8) return F_TIMBER; // Clusters of forest
+        if (n < -0.5) return F_GRASS; // Open plains
+        return F_BRUSH; // Scrubland
     }
 
     // --- GROUND MESH ---
@@ -188,19 +206,18 @@
         const x = pos.getX(i);
         const y = pos.getY(i);
         
-        // 1. Get Natural Elevation first
         let h = getElevation(x, -y);
         
-        // Base Grass Color
-        _c.setHex(0x5c6b45); 
+        // Map ground color to fuel type roughly
+        const fType = getFuelType(x, -y);
+        if(fType === F_GRASS) _c.setHex(0x9acd32); // YellowGreen
+        else if(fType === F_TIMBER) _c.setHex(0x2f4f4f); // DarkSlateGray
+        else _c.setHex(0x5c6b45); // Standard Earth
 
-        // 2. Apply Features
         if(isRiver(x, -y)) {
-            // RIVER: Cut DOWN into the terrain by subtracting from natural height
-            h -= 12; 
+            h -= 12; // River cuts down
             _c.setHex(0x4da6ff);
         } else if(isRoad(x, -y)) {
-            // ROAD: Follows terrain perfectly, just slightly elevated to prevent z-fighting
             h += 0.5;
             _c.setHex(0x777777);
         }
@@ -229,7 +246,8 @@
     scene.add(mesh);
 
     // Data Structures
-    const STRIDE = 7;
+    // STRIDE INCREASED TO 8: x, z, state, moisture, fuel, scale, y, fuelType
+    const STRIDE = 8;
     let data = new Float32Array(CONFIG.count * STRIDE);
     let spatialMap = [];
     const mapDim = Math.ceil(CONFIG.worldSize / CONFIG.cellSize) + 2;
@@ -256,31 +274,37 @@
                 const x = (Math.random()-0.5) * CONFIG.worldSize;
                 const z = (Math.random()-0.5) * CONFIG.worldSize;
                 
-                // Barriers (Hide trees on river/road)
                 if (isRiver(x, z) || isRoad(x, z)) {
                     data[idx+6] = -100; data[idx+2] = S_CHARRED;
                     _mat.makeScale(0,0,0); mesh.setMatrixAt(i, _mat);
                     continue;
                 }
 
-                // IMPORTANT: Trees must sit on natural terrain height
                 const y = getElevation(x, z);
-                
+                const type = getFuelType(x, z);
+                const props = FUEL_PROPS[type];
+
                 data[idx] = x;
                 data[idx+1] = z;
                 data[idx+2] = S_LIVE;
                 data[idx+3] = baseMoisture * 10; 
-                data[idx+4] = CONFIG.burnDuration * (0.8 + Math.random()*0.4);
-                data[idx+5] = 0.5 + Math.random()*1.0; 
+                // Fuel Load (Burn Duration) depends on type
+                data[idx+4] = (3000 * props.burn) * (0.8 + Math.random()*0.4);
+                data[idx+5] = 1.0; // Base Scale placeholder
                 data[idx+6] = y;
+                data[idx+7] = type; // Store Type
 
                 _pos.set(x, y, z);
-                const s = data[idx+5];
-                _scale.set(s, s* (0.8+Math.random()*0.4), s);
+                
+                // Visual Variance based on Type
+                const sY = props.scaleY * (0.8 + Math.random()*0.4);
+                const sXZ = props.scaleXZ * (0.8 + Math.random()*0.4);
+                _scale.set(sXZ, sY, sXZ);
+                
                 _quat.setFromAxisAngle(new THREE.Vector3(0,1,0), Math.random()*Math.PI*2);
                 _mat.compose(_pos, _quat, _scale);
                 mesh.setMatrixAt(i, _mat);
-                mesh.setColorAt(i, new THREE.Color(0x2d5a27));
+                mesh.setColorAt(i, new THREE.Color(props.col));
             }
             mesh.instanceMatrix.needsUpdate = true;
             mesh.instanceColor.needsUpdate = true;
@@ -332,8 +356,7 @@
 
     function cutLine(ox, oz) {
         let needsUpdate = false;
-        // REDUCED BRUSH SIZE by 50% (Radius ~15)
-        const radiusSq = 225; 
+        const radiusSq = 225; // Small Axe 
         
         for(let i=0; i<CONFIG.count; i++) {
             const idx = i*STRIDE;
@@ -350,7 +373,7 @@
         if(needsUpdate) mesh.instanceMatrix.needsUpdate = true;
     }
 
-    // --- PHYSICS ---
+    // --- PHYSICS (Slope & Fuel Model) ---
     function updatePhysics() {
         for(let i=0; i<spatialMap.length; i++) spatialMap[i].length = 0;
         
@@ -377,13 +400,19 @@
 
             if(state === S_CHARRED || state === S_CUT) continue;
 
+            // --- BURNING ---
             if(state === S_BURNING) {
-                data[idx+4] -= 1; 
+                data[idx+4] -= 1; // Burn fuel
                 if(data[idx+4] <= 0) {
                     data[idx+2] = S_CHARRED;
                     mesh.setColorAt(i, new THREE.Color(0x111111));
+                    
+                    // Collapse mesh
+                    const type = data[idx+7];
+                    const props = FUEL_PROPS[type];
                     _pos.set(data[idx], data[idx+6], data[idx+1]);
-                    _scale.set(data[idx+5], 0.1, data[idx+5]);
+                    // Charred remains
+                    _scale.set(props.scaleXZ, 0.1, props.scaleXZ);
                     _quat.set(0,0,0,1);
                     _mat.compose(_pos, _quat, _scale);
                     mesh.setMatrixAt(i, _mat);
@@ -399,9 +428,12 @@
                 continue;
             }
 
-            // Heating Logic
+            // --- HEATING ---
             const tx = data[idx];
             const tz = data[idx+1];
+            const ty = data[idx+6]; // Target Height
+            const tType = data[idx+7]; // Target Fuel Type
+            
             const gx = Math.floor((tx + mapOffset) / CONFIG.cellSize);
             const gz = Math.floor((tz + mapOffset) / CONFIG.cellSize);
             
@@ -428,23 +460,45 @@
                         
                         const dx = tx - data[neighborIdx];
                         const dz = tz - data[neighborIdx+1];
+                        const dy = ty - data[neighborIdx+6]; // Height Difference
+                        
                         const distSq = dx*dx + dz*dz;
                         
                         if(distSq < 900) { 
                             const dist = Math.sqrt(distSq);
+                            
+                            // 1. Wind Effect
                             const nx_dir = dx/dist;
                             const nz_dir = dz/dist;
                             const dot = nx_dir * windVec.x + nz_dir * windVec.z;
                             
                             let windBias = 1.0;
-                            if(dot > 0) {
-                                windBias = 1.0 + (dot * (windSpeed * 0.15)); 
-                            } else {
+                            if(dot > 0) windBias = 1.0 + (dot * (windSpeed * 0.15)); 
+                            else {
                                 windBias = 1.0 + (dot * 0.8); 
                                 if(windBias < 0.1) windBias = 0.1;
                             }
 
-                            const intensity = (1.0 - dist/30) * windBias; 
+                            // 2. Slope Factor (Phi_s)
+                            // If dy > 0 (Target is higher than fire), heat rises -> Faster Spread
+                            // If dy < 0 (Target is lower), heat rises away -> Slower Spread
+                            const slope = dy / (dist + 0.1); // Rise over Run
+                            let slopeFactor = 1.0;
+                            if(slope > 0) {
+                                // Uphill: Significant boost
+                                slopeFactor = 1.0 + (slope * 6.0); 
+                            } else {
+                                // Downhill: Damping
+                                slopeFactor = 1.0 + (slope * 1.0); // slope is negative
+                                if(slopeFactor < 0.2) slopeFactor = 0.2;
+                            }
+
+                            // 3. Fuel Model Factor
+                            // Grass spreads to Grass fast. Timber spreads to Timber slow.
+                            const neighborType = data[neighborIdx+7];
+                            const spreadMod = FUEL_PROPS[neighborType].spread;
+
+                            const intensity = (1.0 - dist/30) * windBias * slopeFactor * spreadMod; 
                             if(intensity > 0) incomingHeat += intensity * CONFIG.baseSpreadRate;
                         }
                     }
