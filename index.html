@@ -2,12 +2,12 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Rothermel Wildfire Simulation</title>
+    <title>Wildfire Sim (River & Roads)</title>
     <style>
         body { margin: 0; overflow: hidden; background: #0b0b0b; font-family: 'Segoe UI', sans-serif; }
         #ui {
             position: absolute; top: 10px; left: 10px;
-            background: rgba(15, 15, 20, 0.9); color: #ccc;
+            background: rgba(15, 15, 20, 0.95); color: #ccc;
             padding: 15px; border-radius: 6px; border: 1px solid #333;
             width: 260px; user-select: none;
         }
@@ -22,7 +22,7 @@
         }
         button:hover { background: #d32f2f; color: white; }
         .val { color: #fff; font-weight: 600; }
-        .legend { display: flex; gap: 10px; font-size: 10px; margin-top: 10px; }
+        .legend { display: flex; gap: 10px; font-size: 10px; margin-top: 10px; flex-wrap: wrap; }
         .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 4px; }
     </style>
     <script type="importmap">
@@ -54,13 +54,13 @@
         <input type="range" id="moisture" min="5" max="30" value="15">
     </div>
 
-    <button id="resetBtn">Regenerate Forest</button>
+    <button id="resetBtn">Regenerate Terrain</button>
     
     <div class="legend" style="margin-top:15px; border-top: 1px solid #333; padding-top:10px;">
         <div><span class="dot" style="background:#228B22"></span>Live</div>
-        <div><span class="dot" style="background:#b8860b"></span>Drying</div>
-        <div><span class="dot" style="background:#ff4500"></span>Active</div>
-        <div><span class="dot" style="background:#111"></span>Char</div>
+        <div><span class="dot" style="background:#ff4500"></span>Fire</div>
+        <div><span class="dot" style="background:#4466ff"></span>River</div>
+        <div><span class="dot" style="background:#555"></span>Road</div>
     </div>
 </div>
 
@@ -68,28 +68,19 @@
     import * as THREE from 'three';
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-    // --- SCIENTIFIC CONFIGURATION ---
+    // --- CONFIGURATION ---
     const CONFIG = {
-        count: 15000,
+        count: 18000,       // Tree Count
         worldSize: 500,
-        cellSize: 20,       // Interaction bucket size
-        
-        // Time Steps
-        timeScale: 1.0,     // Global speed multiplier
-        
-        // Physics Constants (Approximated from Rothermel 1972)
-        baseSpreadRate: 0.05, // Rate at zero wind
-        dryingRate: 0.1,      // How fast heat removes moisture
-        burnDuration: 1800,   // Ticks to consume fuel
-        
-        // Elliptical shape factors (Anderson 1983)
-        // c = coeff for Length-to-Width ratio
-        windFactorC: 0.08    
+        cellSize: 20,       
+        baseSpreadRate: 0.08, 
+        dryingRate: 0.15,      
+        burnDuration: 1500,   
     };
 
     // States
     const S_LIVE = 0;
-    const S_DRYING = 1; // Moisture evaporating
+    const S_DRYING = 1; 
     const S_BURNING = 2;
     const S_CHARRED = 3;
 
@@ -99,9 +90,9 @@
     scene.fog = new THREE.FogExp2(0x111111, 0.0015);
 
     const camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 1, 2000);
-    camera.position.set(0, 450, 300); // Isometric-like view
+    camera.position.set(0, 450, 350); 
     
-    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -115,42 +106,90 @@
     // Lighting
     const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.3);
     scene.add(hemiLight);
-    const sun = new THREE.DirectionalLight(0xffaa33, 1.5);
-    sun.position.set(100, 300, 100);
+    const sun = new THREE.DirectionalLight(0xffaa33, 1.8);
+    sun.position.set(150, 300, 100);
     sun.castShadow = true;
     sun.shadow.mapSize.set(2048, 2048);
     sun.shadow.camera.left = -300; sun.shadow.camera.right = 300;
     sun.shadow.camera.top = 300; sun.shadow.camera.bottom = -300;
     scene.add(sun);
 
-    // --- TERRAIN ---
-    // Simplex-like noise function for hills
-    function noise(x, z) {
+    // --- TERRAIN GENERATION LOGIC ---
+    
+    // 1. Noise for Hills
+    function getElevation(x, z) {
         return Math.sin(x*0.015)*4 + Math.cos(z*0.012)*4 + Math.sin(x*0.03 + z*0.03)*2;
     }
 
-    const groundGeo = new THREE.PlaneGeometry(600, 600, 128, 128);
+    // 2. River Path (Sine wave)
+    function isRiver(x, z) {
+        // A winding river along X axis
+        const riverCenter = Math.sin(x * 0.015) * 60; 
+        const dist = Math.abs(z - riverCenter);
+        return dist < 18; // Width of river
+    }
+
+    // 3. Road Path (Linear)
+    function isRoad(x, z) {
+        // A straight road crossing diagonally
+        // Equation: z = x * 0.5 + offset
+        const roadCenter = x * 0.4 + 50;
+        const dist = Math.abs(z - roadCenter);
+        return dist < 12; // Width of road
+    }
+
+    // --- GROUND MESH ---
+    // We use Vertex Colors to paint the river and road onto the mesh
+    const groundGeo = new THREE.PlaneGeometry(600, 600, 150, 150);
+    const count = groundGeo.attributes.position.count;
+    
+    groundGeo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(count * 3), 3));
+    
     const pos = groundGeo.attributes.position;
-    for(let i=0; i<pos.count; i++){
+    const col = groundGeo.attributes.color;
+    const _c = new THREE.Color();
+
+    for(let i=0; i<count; i++){
         const x = pos.getX(i);
         const y = pos.getY(i); // Plane Y is World Z
-        pos.setZ(i, noise(x, -y));
+        
+        // Calculate Height
+        let h = getElevation(x, -y);
+        
+        // Default: Grass Color (Dark)
+        _c.setHex(0x1a1a1a);
+
+        // Check Features
+        if(isRiver(x, -y)) {
+            h = -2; // River bed is lower
+            _c.setHex(0x2244aa); // Blue
+        } else if(isRoad(x, -y)) {
+            h = 0.5; // Road slightly flattened
+            _c.setHex(0x333333); // Asphalt Grey
+        }
+
+        pos.setZ(i, h);
+        col.setXYZ(i, _c.r, _c.g, _c.b);
     }
+    
     groundGeo.computeVertexNormals();
-    const groundMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 1.0 });
+    
+    const groundMat = new THREE.MeshStandardMaterial({ 
+        vertexColors: true, // IMPORTANT: Enables our custom painting
+        roughness: 0.8,
+        metalness: 0.1
+    });
+    
     const ground = new THREE.Mesh(groundGeo, groundMat);
     ground.rotation.x = -Math.PI/2;
     ground.receiveShadow = true;
     scene.add(ground);
 
     // North Indicator
-    const grid = new THREE.GridHelper(500, 20, 0x333333, 0x222222);
-    scene.add(grid);
     const arrowHelper = new THREE.ArrowHelper(new THREE.Vector3(0,0,-1), new THREE.Vector3(0,20,0), 40, 0xd32f2f);
     scene.add(arrowHelper);
 
     // --- TREES ---
-    // Using a simple geometry for performance
     const treeGeo = new THREE.CylinderGeometry(0, 1.5, 6, 5);
     treeGeo.translate(0, 3, 0);
     const treeMat = new THREE.MeshStandardMaterial({ color: 0xffffff, flatShading: true, roughness: 0.8 });
@@ -159,9 +198,8 @@
     mesh.receiveShadow = true;
     scene.add(mesh);
 
-    // --- SIMULATION DATA (Struct of Arrays) ---
+    // --- SIMULATION DATA ---
     const STRIDE = 7;
-    // 0: x, 1: z, 2: state, 3: moisture, 4: fuel, 5: scale, 6: y
     let data = new Float32Array(CONFIG.count * STRIDE);
     let spatialMap = [];
     const mapDim = Math.ceil(CONFIG.worldSize / CONFIG.cellSize) + 2;
@@ -174,26 +212,43 @@
     const _quat = new THREE.Quaternion();
     const _col = new THREE.Color();
     
-    // Physics State
-    let windVec = { x: 0, z: -1 }; // North
-    let windSpeed = 15; // km/h
-    let baseMoisture = 15; // %
+    let windVec = { x: 0, z: -1 };
+    let windSpeed = 15;
+    let baseMoisture = 15;
 
     function init() {
         spatialMap = new Array(mapDim*mapDim).fill(0).map(()=>[]);
         
+        let validTrees = 0;
+        
         for(let i=0; i<CONFIG.count; i++) {
             const idx = i * STRIDE;
+            
+            // Random Position
             const x = (Math.random()-0.5) * CONFIG.worldSize;
             const z = (Math.random()-0.5) * CONFIG.worldSize;
-            const y = noise(x, z);
+            
+            // CHECK: Is this spot water or road?
+            if (isRiver(x, z) || isRoad(x, z)) {
+                // Hide this tree instance (move it underground)
+                data[idx] = 0; 
+                data[idx+1] = 0;
+                data[idx+6] = -100; // Y
+                data[idx+2] = S_CHARRED; // Dead state so sim ignores it
+                
+                _mat.makeScale(0,0,0);
+                mesh.setMatrixAt(i, _mat);
+                continue;
+            }
+
+            const y = getElevation(x, z);
 
             data[idx] = x;
             data[idx+1] = z;
             data[idx+2] = S_LIVE;
-            data[idx+3] = baseMoisture * 10; // Scaled for simulation usage
+            data[idx+3] = baseMoisture * 10; 
             data[idx+4] = CONFIG.burnDuration * (0.8 + Math.random()*0.4);
-            data[idx+5] = 0.5 + Math.random()*1.0; // Scale
+            data[idx+5] = 0.5 + Math.random()*1.0; 
             data[idx+6] = y;
 
             // Transform
@@ -203,10 +258,13 @@
             _quat.setFromAxisAngle(new THREE.Vector3(0,1,0), Math.random()*Math.PI*2);
             _mat.compose(_pos, _quat, _scale);
             mesh.setMatrixAt(i, _mat);
-            mesh.setColorAt(i, new THREE.Color(0x228B22)); // Forest Green
+            mesh.setColorAt(i, new THREE.Color(0x228B22)); 
+            
+            validTrees++;
         }
         mesh.instanceMatrix.needsUpdate = true;
         mesh.instanceColor.needsUpdate = true;
+        console.log("Forest Generated. Valid Trees:", validTrees);
     }
 
     // --- IGNITION ---
@@ -218,30 +276,38 @@
         mouse.y = -(e.clientY/window.innerHeight)*2+1;
         raycaster.setFromCamera(mouse, camera);
         const hits = raycaster.intersectObject(ground);
-        if(hits.length > 0) ignite(hits[0].point.x, hits[0].point.z);
+        
+        if(hits.length > 0) {
+            const pt = hits[0].point;
+            // Don't ignite water
+            if(!isRiver(pt.x, pt.z)) {
+                ignite(pt.x, pt.z);
+            }
+        }
     });
 
     function ignite(ox, oz) {
-        // Radius ignition
         for(let i=0; i<CONFIG.count; i++) {
             const idx = i*STRIDE;
+            // Skip hidden trees
+            if(data[idx+6] < -50) continue; 
+            
             const dx = data[idx]-ox;
             const dz = data[idx+1]-oz;
-            if(dx*dx + dz*dz < 600) { // 25m radius
+            if(dx*dx + dz*dz < 600) { 
                 data[idx+2] = S_BURNING;
-                data[idx+3] = 0; // Moisture gone
+                data[idx+3] = 0; 
             }
         }
     }
 
     // --- PHYSICS LOOP ---
-    // Implementing Rothermel-inspired Probability
     function updatePhysics() {
-        // 1. Binning (Spatial Hash)
-        // We only bin BURNING trees to act as emitters
+        // 1. Binning
         for(let i=0; i<spatialMap.length; i++) spatialMap[i].length = 0;
         
         for(let i=0; i<CONFIG.count; i++) {
+            // Only bin active fires
             if(data[i*STRIDE + 2] === S_BURNING) {
                 const gx = Math.floor((data[i*STRIDE] + mapOffset) / CONFIG.cellSize);
                 const gz = Math.floor((data[i*STRIDE+1] + mapOffset) / CONFIG.cellSize);
@@ -251,21 +317,15 @@
             }
         }
 
-        // 2. Pre-calculate Wind Constants
-        // Anderson (1983): Elliptical shape depends on wind speed
-        // Length-to-Width Ratio (approximate)
-        const windK = 1 + (0.05 * windSpeed); 
-        // We square the effective spread distance downwind
-        
         let needColor = false;
         let needMatrix = false;
 
-        // 3. Process Trees
+        // 2. Process
         for(let i=0; i<CONFIG.count; i++) {
             const idx = i * STRIDE;
             const state = data[idx+2];
 
-            if(state === S_CHARRED) continue;
+            if(state === S_CHARRED) continue; // Skip Dead/Hidden
 
             // --- BURNING ---
             if(state === S_BURNING) {
@@ -274,7 +334,7 @@
                     data[idx+2] = S_CHARRED;
                     mesh.setColorAt(i, new THREE.Color(0x111111));
                     
-                    // Collapse mesh
+                    // Collapse
                     _pos.set(data[idx], data[idx+6], data[idx+1]);
                     _scale.set(data[idx+5], 0.1, data[idx+5]);
                     _quat.set(0,0,0,1);
@@ -284,8 +344,8 @@
                     needColor = true;
                     needMatrix = true;
                 } else {
-                    // Flicker Effect
-                    if(Math.random() > 0.8) {
+                    // Flicker
+                    if(Math.random() > 0.85) {
                         const flicker = 0.5 + Math.random()*0.5;
                         _col.setHSL(0.05 + Math.random()*0.05, 1.0, flicker * 0.6);
                         mesh.setColorAt(i, _col);
@@ -295,8 +355,7 @@
                 continue;
             }
 
-            // --- HEATING / DRYING ---
-            // Only check if neighbors are burning
+            // --- HEATING ---
             const tx = data[idx];
             const tz = data[idx+1];
             const gx = Math.floor((tx + mapOffset) / CONFIG.cellSize);
@@ -304,7 +363,6 @@
             
             let incomingHeat = 0;
 
-            // Search 3x3 Grid
             for(let nz = gz-1; nz <= gz+1; nz++) {
                 for(let nx = gx-1; nx <= gx+1; nx++) {
                     if(nx<0 || nx>=mapDim || nz<0 || nz>=mapDim) continue;
@@ -313,41 +371,24 @@
                     for(let k=0; k<cell.length; k++) {
                         const neighborIdx = cell[k] * STRIDE;
                         
-                        // Vector from Fire -> Tree
                         const dx = tx - data[neighborIdx];
                         const dz = tz - data[neighborIdx+1];
                         const distSq = dx*dx + dz*dz;
                         
-                        // Interaction Radius (squared)
-                        if(distSq < 900) { // 30m max reach
+                        if(distSq < 900) { 
                             const dist = Math.sqrt(distSq);
-                            
-                            // NORMALIZE direction
                             const nx_dir = dx/dist;
                             const nz_dir = dz/dist;
-
-                            // DOT PRODUCT with Wind
-                            // 1.0 = Downwind (Max Danger)
-                            // -1.0 = Upwind (Safe)
                             const dot = nx_dir * windVec.x + nz_dir * windVec.z;
                             
-                            // ROTHERMEL / ANDERSON BIAS
-                            // Instead of simple addition, we shape the heat envelope.
-                            // Downwind fires project heat much further.
-                            
-                            // Bias factor: Low wind = 1.0 everywhere
-                            // High wind = 5.0 front, 0.2 back
                             let windBias = 1.0;
                             if(dot > 0) {
-                                // Forward spread: Exponential with wind speed
                                 windBias = 1.0 + (dot * (windSpeed * 0.15)); 
                             } else {
-                                // Backing spread: Reduced significantly
                                 windBias = 1.0 + (dot * 0.8); 
                                 if(windBias < 0.1) windBias = 0.1;
                             }
 
-                            // Inverse Square Law damping
                             const intensity = (1.0 - dist/30) * windBias; 
                             if(intensity > 0) incomingHeat += intensity * CONFIG.baseSpreadRate;
                         }
@@ -355,33 +396,22 @@
                 }
             }
 
-            // Apply Heat to Moisture
+            // Apply Heat
             if(incomingHeat > 0) {
-                // Remove moisture
                 data[idx+3] -= incomingHeat * CONFIG.dryingRate;
 
-                // Visual Feedback: Drying
+                // Visual: Drying
                 if(state === S_LIVE && data[idx+3] < baseMoisture * 5) {
                     data[idx+2] = S_DRYING;
-                    mesh.setColorAt(i, new THREE.Color(0xb8860b)); // Dark Goldenrod
+                    mesh.setColorAt(i, new THREE.Color(0xb8860b)); 
                     needColor = true;
                 }
 
                 // Ignition
                 if(data[idx+3] <= 0) {
                     data[idx+2] = S_BURNING;
-                    mesh.setColorAt(i, new THREE.Color(0xff4500)); // Orange Red
+                    mesh.setColorAt(i, new THREE.Color(0xff4500)); 
                     needColor = true;
-                }
-            } else {
-                // Moisture Recovery (Regain water if heat stops)
-                if(data[idx+3] < baseMoisture * 10) {
-                    data[idx+3] += 0.05;
-                    if(data[idx+2] === S_DRYING && data[idx+3] > baseMoisture * 8) {
-                        data[idx+2] = S_LIVE;
-                        mesh.setColorAt(i, new THREE.Color(0x228B22));
-                        needColor = true;
-                    }
                 }
             }
         }
@@ -390,18 +420,16 @@
         if(needMatrix) mesh.instanceMatrix.needsUpdate = true;
     }
 
-    // --- UI HANDLING ---
+    // --- UI ---
     function updateInputs() {
         const d = parseInt(document.getElementById('windDir').value);
         const s = parseInt(document.getElementById('windSpeed').value);
         const m = parseInt(document.getElementById('moisture').value);
 
-        // Update DOM
         document.getElementById('windDirVal').textContent = d + "°";
         document.getElementById('windSpeedVal').textContent = s;
         document.getElementById('moistureVal').textContent = m + "%";
 
-        // Update Physics Globals
         const rad = d * (Math.PI/180);
         windVec.x = Math.sin(rad);
         windVec.z = -Math.cos(rad);
@@ -414,16 +442,7 @@
 
     document.getElementById('windDir').addEventListener('input', updateInputs);
     document.getElementById('windSpeed').addEventListener('input', updateInputs);
-    document.getElementById('moisture').addEventListener('input', () => {
-        updateInputs();
-        // If moisture changes, we should ideally update live trees, 
-        // but for simplicity we let them regenerate on reset or drift naturally.
-        // Or force update live ones:
-        for(let i=0; i<CONFIG.count; i++) {
-            if(data[i*STRIDE+2] === S_LIVE) data[i*STRIDE+3] = baseMoisture * 10;
-        }
-    });
-    
+    document.getElementById('moisture').addEventListener('input', updateInputs);
     document.getElementById('resetBtn').addEventListener('click', init);
 
     window.addEventListener('resize', () => {
@@ -432,11 +451,9 @@
         renderer.setSize(window.innerWidth, window.innerHeight);
     });
 
-    // Boot
     init();
     updateInputs();
 
-    // Loop
     function animate() {
         requestAnimationFrame(animate);
         updatePhysics();
