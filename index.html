@@ -2,14 +2,13 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Wildfire Sim (Tools & Day Mode)</title>
+    <title>Massive Wildfire Sim (1000x1000)</title>
     <style>
         body { margin: 0; overflow: hidden; background: #eef0f5; font-family: 'Segoe UI', sans-serif; }
         
-        /* UI Container */
         #ui {
             position: absolute; top: 10px; left: 10px;
-            background: rgba(255, 255, 255, 0.9); color: #333;
+            background: rgba(255, 255, 255, 0.95); color: #333;
             padding: 15px; border-radius: 8px; border: 1px solid #ccc;
             width: 260px; user-select: none;
             box-shadow: 0 4px 15px rgba(0,0,0,0.1);
@@ -31,19 +30,25 @@
 
         .val { color: #d32f2f; font-weight: 700; }
         
-        /* Toolbar */
         #toolbar {
-            position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
-            display: flex; gap: 10px; background: white; padding: 10px;
-            border-radius: 50px; box-shadow: 0 5px 20px rgba(0,0,0,0.15);
+            position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
+            display: flex; gap: 15px; background: white; padding: 12px 20px;
+            border-radius: 50px; box-shadow: 0 5px 20px rgba(0,0,0,0.2);
         }
         .tool {
             width: 50px; height: 50px; border-radius: 50%; border: 2px solid #eee;
             background: white; cursor: pointer; font-size: 24px; display: flex;
             align-items: center; justify-content: center; transition: 0.2s;
         }
-        .tool:hover { transform: scale(1.1); }
-        .tool.active { border-color: #d32f2f; background: #fff0f0; transform: scale(1.1); }
+        .tool:hover { transform: scale(1.1); background: #f9f9f9; }
+        .tool.active { border-color: #d32f2f; background: #fff0f0; transform: scale(1.15); box-shadow: 0 0 10px rgba(211, 47, 47, 0.3); }
+
+        /* Loading Overlay */
+        #loading {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: #eef0f5; display: flex; justify-content: center; align-items: center;
+            font-size: 24px; color: #555; z-index: 999;
+        }
 
     </style>
     <script type="importmap">
@@ -57,8 +62,10 @@
 </head>
 <body>
 
+<div id="loading">Generating 65,000 Trees...</div>
+
 <div id="ui">
-    <h3>Wildfire Control</h3>
+    <h3>Massive Map Control</h3>
     
     <div class="control">
         <label>Wind Heading <span id="windDirVal" class="val">0° (N)</span></label>
@@ -66,8 +73,8 @@
     </div>
     
     <div class="control">
-        <label>Wind Speed <span id="windSpeedVal" class="val">15</span></label>
-        <input type="range" id="windSpeed" min="0" max="80" value="15">
+        <label>Wind Speed <span id="windSpeedVal" class="val">25</span></label>
+        <input type="range" id="windSpeed" min="0" max="80" value="25">
     </div>
 
     <div class="control">
@@ -75,12 +82,12 @@
         <input type="range" id="moisture" min="5" max="30" value="15">
     </div>
 
-    <button id="resetBtn">Reset Forest</button>
+    <button id="resetBtn">Regenerate Terrain</button>
 </div>
 
 <div id="toolbar">
     <div class="tool active" id="toolIgnite" title="Ignite Fire">🔥</div>
-    <div class="tool" id="toolCut" title="Cut Firebreak (Erase Trees)">🪓</div>
+    <div class="tool" id="toolCut" title="Cut Firebreak">🪓</div>
 </div>
 
 <script type="module">
@@ -89,31 +96,29 @@
 
     // --- CONFIGURATION ---
     const CONFIG = {
-        count: 18000,
-        worldSize: 500,
+        count: 65000,          // INCREASED from 18k to 65k
+        worldSize: 1000,       // INCREASED from 500 to 1000 (Area is 4x larger)
         cellSize: 20,
-        baseSpreadRate: 0.08,
+        baseSpreadRate: 0.1,   // Slight boost for larger map feel
         dryingRate: 0.15,
         burnDuration: 1500,
     };
 
-    // States
     const S_LIVE = 0;
     const S_DRYING = 1;
     const S_BURNING = 2;
     const S_CHARRED = 3;
-    const S_CUT = 4; // New state for erased trees
+    const S_CUT = 4;
 
-    // Tools
-    let currentTool = 'ignite'; // 'ignite' or 'cut'
+    let currentTool = 'ignite';
 
-    // --- THREE JS SETUP ---
+    // --- SCENE ---
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0xeef0f5); // Pale Day Blue
-    scene.fog = new THREE.FogExp2(0xeef0f5, 0.0015);
+    scene.background = new THREE.Color(0xeef0f5);
+    scene.fog = new THREE.FogExp2(0xeef0f5, 0.0008); // Reduced fog density for viewing distance
 
-    const camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 1, 2000);
-    camera.position.set(0, 450, 350);
+    const camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 5, 3000);
+    camera.position.set(0, 900, 700); // Moved camera much higher/further back
     
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
@@ -124,40 +129,40 @@
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.maxPolarAngle = Math.PI / 2 - 0.05;
+    controls.maxDistance = 2000;
 
-    // Lighting (Daylight)
+    // --- LIGHTING ---
     const hemiLight = new THREE.HemisphereLight(0xffffff, 0xffffff, 0.6);
     scene.add(hemiLight);
     const sun = new THREE.DirectionalLight(0xffaa33, 1.2);
-    sun.position.set(150, 400, 100);
+    sun.position.set(300, 500, 200);
     sun.castShadow = true;
-    sun.shadow.mapSize.set(2048, 2048);
-    sun.shadow.camera.left = -300; sun.shadow.camera.right = 300;
-    sun.shadow.camera.top = 300; sun.shadow.camera.bottom = -300;
+    // Expanded shadow map coverage
+    sun.shadow.mapSize.set(4096, 4096); 
+    sun.shadow.camera.left = -600; sun.shadow.camera.right = 600;
+    sun.shadow.camera.top = 600; sun.shadow.camera.bottom = -600;
     scene.add(sun);
 
-    // --- TERRAIN LOGIC (SEPARATED) ---
-    
+    // --- TERRAIN GENERATION ---
     function getElevation(x, z) {
-        return Math.sin(x*0.015)*4 + Math.cos(z*0.012)*4 + Math.sin(x*0.03 + z*0.03)*2;
+        // Larger scale noise for larger world
+        return Math.sin(x*0.008)*8 + Math.cos(z*0.006)*8 + Math.sin(x*0.015 + z*0.015)*4;
     }
 
-    // River: Flows along Z, shifted to Negative X (Left side)
     function isRiver(x, z) {
-        // Center of river oscillates around x = -100
-        const center = Math.sin(z * 0.01) * 30 - 100;
-        return Math.abs(x - center) < 15;
+        // Wider meandering river
+        const center = Math.sin(z * 0.005) * 60 - 200;
+        return Math.abs(x - center) < 20;
     }
 
-    // Road: Runs along Z, shifted to Positive X (Right side)
     function isRoad(x, z) {
-        // Center of road oscillates slightly around x = +100
-        const center = Math.sin(z * 0.005) * 10 + 100;
-        return Math.abs(x - center) < 10;
+        // Long winding road on the right
+        const center = Math.sin(z * 0.003) * 30 + 200;
+        return Math.abs(x - center) < 12;
     }
 
-    // --- GROUND MESH ---
-    const groundGeo = new THREE.PlaneGeometry(600, 600, 150, 150);
+    // --- GROUND MESH (Expanded) ---
+    const groundGeo = new THREE.PlaneGeometry(1200, 1200, 200, 200);
     const count = groundGeo.attributes.position.count;
     groundGeo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(count * 3), 3));
     
@@ -171,15 +176,15 @@
         
         let h = getElevation(x, -y);
         
-        // Base Earth Color (Green-Brown)
+        // Grass
         _c.setHex(0x5c6b45); 
 
         if(isRiver(x, -y)) {
-            h = -2;
-            _c.setHex(0x4da6ff); // Bright Blue
+            h = -4; // Deeper river
+            _c.setHex(0x4da6ff);
         } else if(isRoad(x, -y)) {
             h = 0.5;
-            _c.setHex(0x777777); // Grey Asphalt
+            _c.setHex(0x777777);
         }
 
         pos.setZ(i, h);
@@ -187,30 +192,26 @@
     }
     
     groundGeo.computeVertexNormals();
-    const groundMat = new THREE.MeshStandardMaterial({ 
-        vertexColors: true, 
-        roughness: 0.9,
-    });
-    
+    const groundMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9 });
     const ground = new THREE.Mesh(groundGeo, groundMat);
     ground.rotation.x = -Math.PI/2;
     ground.receiveShadow = true;
     scene.add(ground);
 
-    // Compass
-    const arrowHelper = new THREE.ArrowHelper(new THREE.Vector3(0,0,-1), new THREE.Vector3(0,20,0), 40, 0xd32f2f);
+    const arrowHelper = new THREE.ArrowHelper(new THREE.Vector3(0,0,-1), new THREE.Vector3(0,50,0), 80, 0xd32f2f);
     scene.add(arrowHelper);
 
-    // --- TREES ---
-    const treeGeo = new THREE.CylinderGeometry(0, 1.5, 6, 5);
-    treeGeo.translate(0, 3, 0);
+    // --- TREES (Instanced) ---
+    // Simpler geometry to handle 65k count
+    const treeGeo = new THREE.CylinderGeometry(0, 1.8, 7, 4); 
+    treeGeo.translate(0, 3.5, 0);
     const treeMat = new THREE.MeshStandardMaterial({ color: 0xffffff, flatShading: true, roughness: 0.8 });
     const mesh = new THREE.InstancedMesh(treeGeo, treeMat, CONFIG.count);
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     scene.add(mesh);
 
-    // Data
+    // Data Structures
     const STRIDE = 7;
     let data = new Float32Array(CONFIG.count * STRIDE);
     let spatialMap = [];
@@ -224,47 +225,50 @@
     const _col = new THREE.Color();
     
     let windVec = { x: 0, z: -1 };
-    let windSpeed = 15;
+    let windSpeed = 25;
     let baseMoisture = 15;
 
     function init() {
-        spatialMap = new Array(mapDim*mapDim).fill(0).map(()=>[]);
+        document.getElementById('loading').style.display = 'flex';
         
-        for(let i=0; i<CONFIG.count; i++) {
-            const idx = i * STRIDE;
-            const x = (Math.random()-0.5) * CONFIG.worldSize;
-            const z = (Math.random()-0.5) * CONFIG.worldSize;
+        // Delay to allow UI to render loading screen
+        setTimeout(() => {
+            spatialMap = new Array(mapDim*mapDim).fill(0).map(()=>[]);
             
-            // Check Barriers
-            if (isRiver(x, z) || isRoad(x, z)) {
-                // Hide
-                data[idx+6] = -100; 
-                data[idx+2] = S_CHARRED;
-                _mat.makeScale(0,0,0);
+            for(let i=0; i<CONFIG.count; i++) {
+                const idx = i * STRIDE;
+                const x = (Math.random()-0.5) * CONFIG.worldSize;
+                const z = (Math.random()-0.5) * CONFIG.worldSize;
+                
+                // Barriers
+                if (isRiver(x, z) || isRoad(x, z)) {
+                    data[idx+6] = -100; data[idx+2] = S_CHARRED;
+                    _mat.makeScale(0,0,0); mesh.setMatrixAt(i, _mat);
+                    continue;
+                }
+
+                const y = getElevation(x, z);
+                data[idx] = x;
+                data[idx+1] = z;
+                data[idx+2] = S_LIVE;
+                data[idx+3] = baseMoisture * 10; 
+                data[idx+4] = CONFIG.burnDuration * (0.8 + Math.random()*0.4);
+                data[idx+5] = 0.5 + Math.random()*1.0; 
+                data[idx+6] = y;
+
+                _pos.set(x, y, z);
+                const s = data[idx+5];
+                _scale.set(s, s* (0.8+Math.random()*0.4), s);
+                _quat.setFromAxisAngle(new THREE.Vector3(0,1,0), Math.random()*Math.PI*2);
+                _mat.compose(_pos, _quat, _scale);
                 mesh.setMatrixAt(i, _mat);
-                continue;
+                mesh.setColorAt(i, new THREE.Color(0x2d5a27));
             }
-
-            const y = getElevation(x, z);
-
-            data[idx] = x;
-            data[idx+1] = z;
-            data[idx+2] = S_LIVE;
-            data[idx+3] = baseMoisture * 10; 
-            data[idx+4] = CONFIG.burnDuration * (0.8 + Math.random()*0.4);
-            data[idx+5] = 0.5 + Math.random()*1.0; 
-            data[idx+6] = y;
-
-            _pos.set(x, y, z);
-            const s = data[idx+5];
-            _scale.set(s, s* (0.8+Math.random()*0.4), s);
-            _quat.setFromAxisAngle(new THREE.Vector3(0,1,0), Math.random()*Math.PI*2);
-            _mat.compose(_pos, _quat, _scale);
-            mesh.setMatrixAt(i, _mat);
-            mesh.setColorAt(i, new THREE.Color(0x2d5a27)); // Deep Green
-        }
-        mesh.instanceMatrix.needsUpdate = true;
-        mesh.instanceColor.needsUpdate = true;
+            mesh.instanceMatrix.needsUpdate = true;
+            mesh.instanceColor.needsUpdate = true;
+            
+            document.getElementById('loading').style.display = 'none';
+        }, 100);
     }
 
     // --- INTERACTION ---
@@ -277,11 +281,7 @@
         isDragging = true;
         handleInput(e);
     });
-
-    window.addEventListener('mousemove', e => {
-        if(isDragging) handleInput(e);
-    });
-
+    window.addEventListener('mousemove', e => { if(isDragging) handleInput(e); });
     window.addEventListener('mouseup', () => isDragging = false);
 
     function handleInput(e) {
@@ -289,7 +289,6 @@
         mouse.y = -(e.clientY/window.innerHeight)*2+1;
         raycaster.setFromCamera(mouse, camera);
         const hits = raycaster.intersectObject(ground);
-        
         if(hits.length > 0) {
             const pt = hits[0].point;
             if(currentTool === 'ignite') {
@@ -306,7 +305,7 @@
             if(data[idx+6] < -50) continue; 
             const dx = data[idx]-ox;
             const dz = data[idx+1]-oz;
-            if(dx*dx + dz*dz < 600) { 
+            if(dx*dx + dz*dz < 900) { // Larger brush for big map
                 data[idx+2] = S_BURNING;
                 data[idx+3] = 0; 
             }
@@ -317,14 +316,11 @@
         let needsUpdate = false;
         for(let i=0; i<CONFIG.count; i++) {
             const idx = i*STRIDE;
-            if(data[idx+6] < -50) continue; // Skip hidden
-            
+            if(data[idx+6] < -50) continue;
             const dx = data[idx]-ox;
             const dz = data[idx+1]-oz;
-            // Radius 25 for cutter
-            if(dx*dx + dz*dz < 600) { 
+            if(dx*dx + dz*dz < 900) { 
                 data[idx+2] = S_CUT;
-                // Scale to zero to hide
                 _mat.makeScale(0,0,0);
                 mesh.setMatrixAt(i, _mat);
                 needsUpdate = true;
@@ -333,13 +329,14 @@
         if(needsUpdate) mesh.instanceMatrix.needsUpdate = true;
     }
 
-    // --- PHYSICS LOOP ---
+    // --- PHYSICS (Optimized for 65k) ---
     function updatePhysics() {
         for(let i=0; i<spatialMap.length; i++) spatialMap[i].length = 0;
         
-        // 1. Binning
+        let burningCount = 0;
         for(let i=0; i<CONFIG.count; i++) {
             if(data[i*STRIDE + 2] === S_BURNING) {
+                burningCount++;
                 const gx = Math.floor((data[i*STRIDE] + mapOffset) / CONFIG.cellSize);
                 const gz = Math.floor((data[i*STRIDE+1] + mapOffset) / CONFIG.cellSize);
                 if(gx>=0 && gx<mapDim && gz>=0 && gz<mapDim) {
@@ -348,10 +345,12 @@
             }
         }
 
+        // Optimization: Skip physics if no fire
+        if(burningCount === 0) return;
+
         let needColor = false;
         let needMatrix = false;
 
-        // 2. Calculation
         for(let i=0; i<CONFIG.count; i++) {
             const idx = i * STRIDE;
             const state = data[idx+2];
@@ -370,7 +369,7 @@
                     mesh.setMatrixAt(i, _mat);
                     needColor = true; needMatrix = true;
                 } else {
-                    if(Math.random() > 0.85) {
+                    if(Math.random() > 0.9) { // Reduced flicker frequency for performance
                         const flicker = 0.5 + Math.random()*0.5;
                         _col.setHSL(0.05 + Math.random()*0.05, 1.0, flicker * 0.6);
                         mesh.setColorAt(i, _col);
@@ -380,13 +379,25 @@
                 continue;
             }
 
-            // Heating
+            // Heating Logic
             const tx = data[idx];
             const tz = data[idx+1];
             const gx = Math.floor((tx + mapOffset) / CONFIG.cellSize);
             const gz = Math.floor((tz + mapOffset) / CONFIG.cellSize);
             
             let incomingHeat = 0;
+
+            // Loop optimization: Only check if center or neighbors have fire
+            let neighborsHaveFire = false;
+             for(let nz = gz-1; nz <= gz+1; nz++) {
+                for(let nx = gx-1; nx <= gx+1; nx++) {
+                    if(nx>=0 && nx<mapDim && nz>=0 && nz<mapDim) {
+                         if(spatialMap[nz*mapDim+nx].length > 0) neighborsHaveFire = true;
+                    }
+                }
+            }
+            
+            if(!neighborsHaveFire) continue;
 
             for(let nz = gz-1; nz <= gz+1; nz++) {
                 for(let nx = gx-1; nx <= gx+1; nx++) {
@@ -454,23 +465,17 @@
         windSpeed = s;
         baseMoisture = m;
         arrowHelper.setDirection(new THREE.Vector3(windVec.x, 0, windVec.z));
-        arrowHelper.setLength(40 + s);
+        arrowHelper.setLength(60 + s);
     }
 
-    // Toolbar Switching
     const tIgnite = document.getElementById('toolIgnite');
     const tCut = document.getElementById('toolCut');
     
     tIgnite.addEventListener('click', () => {
-        currentTool = 'ignite';
-        tIgnite.classList.add('active');
-        tCut.classList.remove('active');
+        currentTool = 'ignite'; tIgnite.classList.add('active'); tCut.classList.remove('active');
     });
-    
     tCut.addEventListener('click', () => {
-        currentTool = 'cut';
-        tCut.classList.add('active');
-        tIgnite.classList.remove('active');
+        currentTool = 'cut'; tCut.classList.add('active'); tIgnite.classList.remove('active');
     });
 
     document.getElementById('windDir').addEventListener('input', updateInputs);
