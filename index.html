@@ -2,28 +2,49 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Wildfire Sim (River & Roads)</title>
+    <title>Wildfire Sim (Tools & Day Mode)</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #0b0b0b; font-family: 'Segoe UI', sans-serif; }
+        body { margin: 0; overflow: hidden; background: #eef0f5; font-family: 'Segoe UI', sans-serif; }
+        
+        /* UI Container */
         #ui {
             position: absolute; top: 10px; left: 10px;
-            background: rgba(15, 15, 20, 0.95); color: #ccc;
-            padding: 15px; border-radius: 6px; border: 1px solid #333;
+            background: rgba(255, 255, 255, 0.9); color: #333;
+            padding: 15px; border-radius: 8px; border: 1px solid #ccc;
             width: 260px; user-select: none;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
         }
-        h3 { margin: 0 0 10px 0; color: #e0e0e0; font-weight: 400; font-size: 16px; border-bottom: 1px solid #444; padding-bottom: 8px; }
-        .control { margin-bottom: 12px; }
-        label { display: flex; justify-content: space-between; font-size: 11px; color: #888; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+
+        h3 { margin: 0 0 10px 0; color: #222; font-weight: 600; font-size: 16px; border-bottom: 2px solid #ddd; padding-bottom: 8px; }
+        
+        .control { margin-bottom: 15px; }
+        label { display: flex; justify-content: space-between; font-size: 11px; color: #666; margin-bottom: 5px; text-transform: uppercase; font-weight: bold; }
         input[type=range] { width: 100%; cursor: pointer; accent-color: #d32f2f; }
+        
         button { 
-            background: #2c2c35; color: #d32f2f; border: 1px solid #d32f2f; 
-            padding: 10px; width: 100%; cursor: pointer; border-radius: 3px; 
-            font-size: 11px; text-transform: uppercase; letter-spacing: 1px; transition: 0.2s;
+            background: #f0f0f0; color: #333; border: 1px solid #ccc; 
+            padding: 8px; width: 100%; cursor: pointer; border-radius: 4px; 
+            font-size: 11px; text-transform: uppercase; font-weight: bold; transition: 0.2s;
+            margin-top: 5px;
         }
-        button:hover { background: #d32f2f; color: white; }
-        .val { color: #fff; font-weight: 600; }
-        .legend { display: flex; gap: 10px; font-size: 10px; margin-top: 10px; flex-wrap: wrap; }
-        .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 4px; }
+        button:hover { background: #e0e0e0; }
+
+        .val { color: #d32f2f; font-weight: 700; }
+        
+        /* Toolbar */
+        #toolbar {
+            position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+            display: flex; gap: 10px; background: white; padding: 10px;
+            border-radius: 50px; box-shadow: 0 5px 20px rgba(0,0,0,0.15);
+        }
+        .tool {
+            width: 50px; height: 50px; border-radius: 50%; border: 2px solid #eee;
+            background: white; cursor: pointer; font-size: 24px; display: flex;
+            align-items: center; justify-content: center; transition: 0.2s;
+        }
+        .tool:hover { transform: scale(1.1); }
+        .tool.active { border-color: #d32f2f; background: #fff0f0; transform: scale(1.1); }
+
     </style>
     <script type="importmap">
         {
@@ -37,7 +58,7 @@
 <body>
 
 <div id="ui">
-    <h3>Rothermel Spread Model</h3>
+    <h3>Wildfire Control</h3>
     
     <div class="control">
         <label>Wind Heading <span id="windDirVal" class="val">0° (N)</span></label>
@@ -45,23 +66,21 @@
     </div>
     
     <div class="control">
-        <label>Wind Velocity (km/h) <span id="windSpeedVal" class="val">15</span></label>
+        <label>Wind Speed <span id="windSpeedVal" class="val">15</span></label>
         <input type="range" id="windSpeed" min="0" max="80" value="15">
     </div>
 
     <div class="control">
-        <label>Fuel Moisture (%) <span id="moistureVal" class="val">15%</span></label>
+        <label>Fuel Moisture <span id="moistureVal" class="val">15%</span></label>
         <input type="range" id="moisture" min="5" max="30" value="15">
     </div>
 
-    <button id="resetBtn">Regenerate Terrain</button>
-    
-    <div class="legend" style="margin-top:15px; border-top: 1px solid #333; padding-top:10px;">
-        <div><span class="dot" style="background:#228B22"></span>Live</div>
-        <div><span class="dot" style="background:#ff4500"></span>Fire</div>
-        <div><span class="dot" style="background:#4466ff"></span>River</div>
-        <div><span class="dot" style="background:#555"></span>Road</div>
-    </div>
+    <button id="resetBtn">Reset Forest</button>
+</div>
+
+<div id="toolbar">
+    <div class="tool active" id="toolIgnite" title="Ignite Fire">🔥</div>
+    <div class="tool" id="toolCut" title="Cut Firebreak (Erase Trees)">🪓</div>
 </div>
 
 <script type="module">
@@ -70,27 +89,31 @@
 
     // --- CONFIGURATION ---
     const CONFIG = {
-        count: 18000,       // Tree Count
+        count: 18000,
         worldSize: 500,
-        cellSize: 20,       
-        baseSpreadRate: 0.08, 
-        dryingRate: 0.15,      
-        burnDuration: 1500,   
+        cellSize: 20,
+        baseSpreadRate: 0.08,
+        dryingRate: 0.15,
+        burnDuration: 1500,
     };
 
     // States
     const S_LIVE = 0;
-    const S_DRYING = 1; 
+    const S_DRYING = 1;
     const S_BURNING = 2;
     const S_CHARRED = 3;
+    const S_CUT = 4; // New state for erased trees
+
+    // Tools
+    let currentTool = 'ignite'; // 'ignite' or 'cut'
 
     // --- THREE JS SETUP ---
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x111111);
-    scene.fog = new THREE.FogExp2(0x111111, 0.0015);
+    scene.background = new THREE.Color(0xeef0f5); // Pale Day Blue
+    scene.fog = new THREE.FogExp2(0xeef0f5, 0.0015);
 
     const camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 1, 2000);
-    camera.position.set(0, 450, 350); 
+    camera.position.set(0, 450, 350);
     
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
@@ -100,49 +123,42 @@
 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
-    controls.dampingFactor = 0.05;
     controls.maxPolarAngle = Math.PI / 2 - 0.05;
 
-    // Lighting
-    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.3);
+    // Lighting (Daylight)
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0xffffff, 0.6);
     scene.add(hemiLight);
-    const sun = new THREE.DirectionalLight(0xffaa33, 1.8);
-    sun.position.set(150, 300, 100);
+    const sun = new THREE.DirectionalLight(0xffaa33, 1.2);
+    sun.position.set(150, 400, 100);
     sun.castShadow = true;
     sun.shadow.mapSize.set(2048, 2048);
     sun.shadow.camera.left = -300; sun.shadow.camera.right = 300;
     sun.shadow.camera.top = 300; sun.shadow.camera.bottom = -300;
     scene.add(sun);
 
-    // --- TERRAIN GENERATION LOGIC ---
+    // --- TERRAIN LOGIC (SEPARATED) ---
     
-    // 1. Noise for Hills
     function getElevation(x, z) {
         return Math.sin(x*0.015)*4 + Math.cos(z*0.012)*4 + Math.sin(x*0.03 + z*0.03)*2;
     }
 
-    // 2. River Path (Sine wave)
+    // River: Flows along Z, shifted to Negative X (Left side)
     function isRiver(x, z) {
-        // A winding river along X axis
-        const riverCenter = Math.sin(x * 0.015) * 60; 
-        const dist = Math.abs(z - riverCenter);
-        return dist < 18; // Width of river
+        // Center of river oscillates around x = -100
+        const center = Math.sin(z * 0.01) * 30 - 100;
+        return Math.abs(x - center) < 15;
     }
 
-    // 3. Road Path (Linear)
+    // Road: Runs along Z, shifted to Positive X (Right side)
     function isRoad(x, z) {
-        // A straight road crossing diagonally
-        // Equation: z = x * 0.5 + offset
-        const roadCenter = x * 0.4 + 50;
-        const dist = Math.abs(z - roadCenter);
-        return dist < 12; // Width of road
+        // Center of road oscillates slightly around x = +100
+        const center = Math.sin(z * 0.005) * 10 + 100;
+        return Math.abs(x - center) < 10;
     }
 
     // --- GROUND MESH ---
-    // We use Vertex Colors to paint the river and road onto the mesh
     const groundGeo = new THREE.PlaneGeometry(600, 600, 150, 150);
     const count = groundGeo.attributes.position.count;
-    
     groundGeo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(count * 3), 3));
     
     const pos = groundGeo.attributes.position;
@@ -151,21 +167,19 @@
 
     for(let i=0; i<count; i++){
         const x = pos.getX(i);
-        const y = pos.getY(i); // Plane Y is World Z
+        const y = pos.getY(i);
         
-        // Calculate Height
         let h = getElevation(x, -y);
         
-        // Default: Grass Color (Dark)
-        _c.setHex(0x1a1a1a);
+        // Base Earth Color (Green-Brown)
+        _c.setHex(0x5c6b45); 
 
-        // Check Features
         if(isRiver(x, -y)) {
-            h = -2; // River bed is lower
-            _c.setHex(0x2244aa); // Blue
+            h = -2;
+            _c.setHex(0x4da6ff); // Bright Blue
         } else if(isRoad(x, -y)) {
-            h = 0.5; // Road slightly flattened
-            _c.setHex(0x333333); // Asphalt Grey
+            h = 0.5;
+            _c.setHex(0x777777); // Grey Asphalt
         }
 
         pos.setZ(i, h);
@@ -173,11 +187,9 @@
     }
     
     groundGeo.computeVertexNormals();
-    
     const groundMat = new THREE.MeshStandardMaterial({ 
-        vertexColors: true, // IMPORTANT: Enables our custom painting
-        roughness: 0.8,
-        metalness: 0.1
+        vertexColors: true, 
+        roughness: 0.9,
     });
     
     const ground = new THREE.Mesh(groundGeo, groundMat);
@@ -185,7 +197,7 @@
     ground.receiveShadow = true;
     scene.add(ground);
 
-    // North Indicator
+    // Compass
     const arrowHelper = new THREE.ArrowHelper(new THREE.Vector3(0,0,-1), new THREE.Vector3(0,20,0), 40, 0xd32f2f);
     scene.add(arrowHelper);
 
@@ -198,14 +210,13 @@
     mesh.receiveShadow = true;
     scene.add(mesh);
 
-    // --- SIMULATION DATA ---
+    // Data
     const STRIDE = 7;
     let data = new Float32Array(CONFIG.count * STRIDE);
     let spatialMap = [];
     const mapDim = Math.ceil(CONFIG.worldSize / CONFIG.cellSize) + 2;
     const mapOffset = CONFIG.worldSize / 2;
 
-    // Helper Objects
     const _mat = new THREE.Matrix4();
     const _pos = new THREE.Vector3();
     const _scale = new THREE.Vector3();
@@ -219,23 +230,16 @@
     function init() {
         spatialMap = new Array(mapDim*mapDim).fill(0).map(()=>[]);
         
-        let validTrees = 0;
-        
         for(let i=0; i<CONFIG.count; i++) {
             const idx = i * STRIDE;
-            
-            // Random Position
             const x = (Math.random()-0.5) * CONFIG.worldSize;
             const z = (Math.random()-0.5) * CONFIG.worldSize;
             
-            // CHECK: Is this spot water or road?
+            // Check Barriers
             if (isRiver(x, z) || isRoad(x, z)) {
-                // Hide this tree instance (move it underground)
-                data[idx] = 0; 
-                data[idx+1] = 0;
-                data[idx+6] = -100; // Y
-                data[idx+2] = S_CHARRED; // Dead state so sim ignores it
-                
+                // Hide
+                data[idx+6] = -100; 
+                data[idx+2] = S_CHARRED;
                 _mat.makeScale(0,0,0);
                 mesh.setMatrixAt(i, _mat);
                 continue;
@@ -251,27 +255,36 @@
             data[idx+5] = 0.5 + Math.random()*1.0; 
             data[idx+6] = y;
 
-            // Transform
             _pos.set(x, y, z);
             const s = data[idx+5];
             _scale.set(s, s* (0.8+Math.random()*0.4), s);
             _quat.setFromAxisAngle(new THREE.Vector3(0,1,0), Math.random()*Math.PI*2);
             _mat.compose(_pos, _quat, _scale);
             mesh.setMatrixAt(i, _mat);
-            mesh.setColorAt(i, new THREE.Color(0x228B22)); 
-            
-            validTrees++;
+            mesh.setColorAt(i, new THREE.Color(0x2d5a27)); // Deep Green
         }
         mesh.instanceMatrix.needsUpdate = true;
         mesh.instanceColor.needsUpdate = true;
-        console.log("Forest Generated. Valid Trees:", validTrees);
     }
 
-    // --- IGNITION ---
+    // --- INTERACTION ---
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
+    let isDragging = false;
+
     window.addEventListener('mousedown', e => {
         if(e.target.tagName !== 'CANVAS') return;
+        isDragging = true;
+        handleInput(e);
+    });
+
+    window.addEventListener('mousemove', e => {
+        if(isDragging) handleInput(e);
+    });
+
+    window.addEventListener('mouseup', () => isDragging = false);
+
+    function handleInput(e) {
         mouse.x = (e.clientX/window.innerWidth)*2-1;
         mouse.y = -(e.clientY/window.innerHeight)*2+1;
         raycaster.setFromCamera(mouse, camera);
@@ -279,19 +292,18 @@
         
         if(hits.length > 0) {
             const pt = hits[0].point;
-            // Don't ignite water
-            if(!isRiver(pt.x, pt.z)) {
-                ignite(pt.x, pt.z);
+            if(currentTool === 'ignite') {
+                if(!isRiver(pt.x, pt.z)) ignite(pt.x, pt.z);
+            } else if(currentTool === 'cut') {
+                cutLine(pt.x, pt.z);
             }
         }
-    });
+    }
 
     function ignite(ox, oz) {
         for(let i=0; i<CONFIG.count; i++) {
             const idx = i*STRIDE;
-            // Skip hidden trees
             if(data[idx+6] < -50) continue; 
-            
             const dx = data[idx]-ox;
             const dz = data[idx+1]-oz;
             if(dx*dx + dz*dz < 600) { 
@@ -301,13 +313,32 @@
         }
     }
 
+    function cutLine(ox, oz) {
+        let needsUpdate = false;
+        for(let i=0; i<CONFIG.count; i++) {
+            const idx = i*STRIDE;
+            if(data[idx+6] < -50) continue; // Skip hidden
+            
+            const dx = data[idx]-ox;
+            const dz = data[idx+1]-oz;
+            // Radius 25 for cutter
+            if(dx*dx + dz*dz < 600) { 
+                data[idx+2] = S_CUT;
+                // Scale to zero to hide
+                _mat.makeScale(0,0,0);
+                mesh.setMatrixAt(i, _mat);
+                needsUpdate = true;
+            }
+        }
+        if(needsUpdate) mesh.instanceMatrix.needsUpdate = true;
+    }
+
     // --- PHYSICS LOOP ---
     function updatePhysics() {
-        // 1. Binning
         for(let i=0; i<spatialMap.length; i++) spatialMap[i].length = 0;
         
+        // 1. Binning
         for(let i=0; i<CONFIG.count; i++) {
-            // Only bin active fires
             if(data[i*STRIDE + 2] === S_BURNING) {
                 const gx = Math.floor((data[i*STRIDE] + mapOffset) / CONFIG.cellSize);
                 const gz = Math.floor((data[i*STRIDE+1] + mapOffset) / CONFIG.cellSize);
@@ -320,31 +351,25 @@
         let needColor = false;
         let needMatrix = false;
 
-        // 2. Process
+        // 2. Calculation
         for(let i=0; i<CONFIG.count; i++) {
             const idx = i * STRIDE;
             const state = data[idx+2];
 
-            if(state === S_CHARRED) continue; // Skip Dead/Hidden
+            if(state === S_CHARRED || state === S_CUT) continue;
 
-            // --- BURNING ---
             if(state === S_BURNING) {
-                data[idx+4] -= 1; // Burn fuel
+                data[idx+4] -= 1; 
                 if(data[idx+4] <= 0) {
                     data[idx+2] = S_CHARRED;
                     mesh.setColorAt(i, new THREE.Color(0x111111));
-                    
-                    // Collapse
                     _pos.set(data[idx], data[idx+6], data[idx+1]);
                     _scale.set(data[idx+5], 0.1, data[idx+5]);
                     _quat.set(0,0,0,1);
                     _mat.compose(_pos, _quat, _scale);
                     mesh.setMatrixAt(i, _mat);
-                    
-                    needColor = true;
-                    needMatrix = true;
+                    needColor = true; needMatrix = true;
                 } else {
-                    // Flicker
                     if(Math.random() > 0.85) {
                         const flicker = 0.5 + Math.random()*0.5;
                         _col.setHSL(0.05 + Math.random()*0.05, 1.0, flicker * 0.6);
@@ -355,7 +380,7 @@
                 continue;
             }
 
-            // --- HEATING ---
+            // Heating
             const tx = data[idx];
             const tz = data[idx+1];
             const gx = Math.floor((tx + mapOffset) / CONFIG.cellSize);
@@ -396,18 +421,13 @@
                 }
             }
 
-            // Apply Heat
             if(incomingHeat > 0) {
                 data[idx+3] -= incomingHeat * CONFIG.dryingRate;
-
-                // Visual: Drying
                 if(state === S_LIVE && data[idx+3] < baseMoisture * 5) {
                     data[idx+2] = S_DRYING;
                     mesh.setColorAt(i, new THREE.Color(0xb8860b)); 
                     needColor = true;
                 }
-
-                // Ignition
                 if(data[idx+3] <= 0) {
                     data[idx+2] = S_BURNING;
                     mesh.setColorAt(i, new THREE.Color(0xff4500)); 
@@ -420,25 +440,38 @@
         if(needMatrix) mesh.instanceMatrix.needsUpdate = true;
     }
 
-    // --- UI ---
+    // --- UI LOGIC ---
     function updateInputs() {
         const d = parseInt(document.getElementById('windDir').value);
         const s = parseInt(document.getElementById('windSpeed').value);
         const m = parseInt(document.getElementById('moisture').value);
-
         document.getElementById('windDirVal').textContent = d + "°";
         document.getElementById('windSpeedVal').textContent = s;
         document.getElementById('moistureVal').textContent = m + "%";
-
         const rad = d * (Math.PI/180);
         windVec.x = Math.sin(rad);
         windVec.z = -Math.cos(rad);
         windSpeed = s;
         baseMoisture = m;
-        
         arrowHelper.setDirection(new THREE.Vector3(windVec.x, 0, windVec.z));
         arrowHelper.setLength(40 + s);
     }
+
+    // Toolbar Switching
+    const tIgnite = document.getElementById('toolIgnite');
+    const tCut = document.getElementById('toolCut');
+    
+    tIgnite.addEventListener('click', () => {
+        currentTool = 'ignite';
+        tIgnite.classList.add('active');
+        tCut.classList.remove('active');
+    });
+    
+    tCut.addEventListener('click', () => {
+        currentTool = 'cut';
+        tCut.classList.add('active');
+        tIgnite.classList.remove('active');
+    });
 
     document.getElementById('windDir').addEventListener('input', updateInputs);
     document.getElementById('windSpeed').addEventListener('input', updateInputs);
