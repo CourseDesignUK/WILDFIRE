@@ -2,15 +2,20 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Wildfire Lab: Weather & Environment</title>
+    <title>Wildfire Lab: 24hr Cycle & Veering Winds</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #eef0f5; font-family: 'Segoe UI', sans-serif; }
+        body { margin: 0; overflow: hidden; background: #000; font-family: 'Segoe UI', sans-serif; }
         #ui {
             position: absolute; top: 10px; left: 10px;
-            background: rgba(255, 255, 255, 0.95); color: #333;
+            background: rgba(255, 255, 255, 0.9); color: #333;
             padding: 15px; border-radius: 8px; border: 1px solid #ccc;
-            width: 290px; user-select: none; box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            width: 290px; user-select: none; box-shadow: 0 4px 15px rgba(0,0,0,0.3);
             max-height: 90vh; overflow-y: auto; z-index: 10;
+        }
+        #clock-display {
+            font-size: 24px; font-weight: 800; text-align: center; 
+            margin-bottom: 10px; font-family: 'Courier New', monospace;
+            color: #d32f2f; background: #222; padding: 5px; border-radius: 4px;
         }
         h3 { margin: 0 0 10px 0; color: #222; font-weight: 600; border-bottom: 2px solid #ddd; padding-bottom: 8px; }
         .control { margin-bottom: 12px; }
@@ -18,15 +23,13 @@
         input[type=range] { width: 100%; cursor: pointer; accent-color: #d32f2f; }
         button { background: #f0f0f0; border: 1px solid #ccc; padding: 8px; width: 100%; cursor: pointer; border-radius: 4px; font-weight: bold; margin-top: 5px; }
         .val { color: #d32f2f; font-weight: 700; }
-        
         .weather-toggle { display: flex; gap: 5px; margin-top: 5px; }
         .w-btn { flex: 1; padding: 8px; border: 1px solid #ccc; background: white; cursor: pointer; border-radius: 4px; font-size: 14px; }
         .w-btn.active { background: #d32f2f; color: white; border-color: #b71c1c; }
-
         #toolbar {
             position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
-            display: flex; gap: 10px; background: white; padding: 12px 20px;
-            border-radius: 50px; box-shadow: 0 5px 20px rgba(0,0,0,0.2);
+            display: flex; gap: 10px; background: rgba(255,255,255,0.9); padding: 12px 20px;
+            border-radius: 50px; box-shadow: 0 5px 20px rgba(0,0,0,0.4);
         }
         .tool {
             width: 45px; height: 45px; border-radius: 50%; border: 2px solid #eee;
@@ -39,9 +42,10 @@
     <script type="importmap"> { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js", "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/" } } </script>
 </head>
 <body>
-<div id="loading">Preparing Forecast...</div>
+<div id="loading">Syncing Atmospheric Data...</div>
 <div id="ui">
-    <h3>Weather Lab</h3>
+    <div id="clock-display">12:00</div>
+    <h3>Environmental Control</h3>
     <div class="control">
         <label>Weather Condition</label>
         <div class="weather-toggle">
@@ -51,7 +55,8 @@
         </div>
     </div>
     <div class="control"><label>Simulation Speed <span id="simSpeedVal" class="val">1.0x</span></label><input type="range" id="simSpeed" min="0.1" max="5.0" step="0.1" value="1.0"></div>
-    <div class="control"><label>Wind Speed <span id="windSpeedVal" class="val">25</span></label><input type="range" id="windSpeed" min="0" max="80" value="25"></div>
+    <div class="control"><label>Wind Base Speed <span id="windSpeedVal" class="val">25</span></label><input type="range" id="windSpeed" min="0" max="80" value="25"></div>
+    <div id="wind-info" style="font-size: 10px; color: #888; font-style: italic;">Wind is backing/veering with time...</div>
     <button id="resetBtn">Reset Map</button>
 </div>
 <div id="toolbar">
@@ -75,30 +80,30 @@
     };
 
     let currentTool = 'ignite', simSpeed = 1.0, isShift = false, isDragging = false, weather = 'sunny';
-    const scene = new THREE.Scene(); scene.background = new THREE.Color(0x87ceeb);
+    let simTime = 12 * 60; // Minutes from midnight
+    
+    const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 5, 6000);
     camera.position.set(0, 1600, 1300);
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     document.body.appendChild(renderer.domElement);
     const controls = new OrbitControls(camera, renderer.domElement);
-    const sun = new THREE.DirectionalLight(0xffffff, 1.2); sun.position.set(400, 700, 300); scene.add(sun);
+    
+    // --- LIGHTING ---
+    const sun = new THREE.DirectionalLight(0xffffff, 1.2); scene.add(sun);
     const ambient = new THREE.HemisphereLight(0xffffff, 0x444444, 0.6); scene.add(ambient);
 
-    // --- RAIN PARTICLES ---
+    // --- RAIN ---
     const rainCount = 10000;
     const rainGeo = new THREE.BufferGeometry();
     const rainPos = new Float32Array(rainCount * 3);
     for(let i=0; i<rainCount*3; i+=3) { 
-        rainPos[i] = (Math.random()-0.5)*2000; 
-        rainPos[i+1] = Math.random()*1000; 
-        rainPos[i+2] = (Math.random()-0.5)*2000; 
+        rainPos[i] = (Math.random()-0.5)*2000; rainPos[i+1] = Math.random()*1000; rainPos[i+2] = (Math.random()-0.5)*2000; 
     }
     rainGeo.setAttribute('position', new THREE.BufferAttribute(rainPos, 3));
-    const rainMat = new THREE.PointsMaterial({ color: 0xaaaaaa, size: 2, transparent: true, opacity: 0.6 });
-    const rainSystem = new THREE.Points(rainGeo, rainMat);
-    rainSystem.visible = false;
-    scene.add(rainSystem);
+    const rainSystem = new THREE.Points(rainGeo, new THREE.PointsMaterial({ color: 0xaaaaaa, size: 2, transparent: true, opacity: 0.6 }));
+    rainSystem.visible = false; scene.add(rainSystem);
 
     const groundGeo = new THREE.PlaneGeometry(1800, 1800, 100, 100);
     const groundMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9 });
@@ -142,14 +147,27 @@
         }, 100);
     }
 
-    function applyWeather(mode) {
-        weather = mode;
-        const btns = document.querySelectorAll('.w-btn'); btns.forEach(b => b.classList.remove('active'));
-        document.getElementById('w-'+mode).classList.add('active');
-        if(mode === 'sunny') { scene.background.set(0x87ceeb); sun.intensity = 1.2; rainSystem.visible = false; }
-        if(mode === 'cloudy') { scene.background.set(0x667788); sun.intensity = 0.5; rainSystem.visible = false; }
-        if(mode === 'rain') { scene.background.set(0x445566); sun.intensity = 0.2; rainSystem.visible = true; }
+    function updateTimeAndWind() {
+        simTime = (simTime + 0.1 * simSpeed) % 1440;
+        const hrs = Math.floor(simTime / 60), mins = Math.floor(simTime % 60);
+        document.getElementById('clock-display').innerText = `${hrs.toString().padStart(2,'0')}:${mins.toString().padStart(2,'0')}`;
+
+        // Cycle: Noon (1), Sunset (0), Midnight (-1), Sunrise (0)
+        const dayProgress = (simTime - 720) / 720; 
+        const lightAngle = dayProgress * Math.PI;
+        sun.position.set(Math.cos(lightAngle)*400, Math.sin(lightAngle)*700, 300);
+        
+        const dayFactor = Math.max(0, Math.sin(lightAngle));
+        sun.intensity = dayFactor * (weather === 'sunny' ? 1.5 : (weather === 'cloudy' ? 0.6 : 0.2));
+        ambient.intensity = Math.max(0.1, dayFactor * 0.6);
+        scene.background.lerpColors(new THREE.Color(0x020205), (weather==='sunny'?new THREE.Color(0x87ceeb):new THREE.Color(0x445566)), Math.max(0.05, dayFactor));
+
+        // Backing and Veering Wind (Sinusoidal shift of angle over time)
+        const windBaseAngle = Math.sin(simTime * 0.005) * 0.5; // Oscillates angle
+        windDir = windBaseAngle;
     }
+
+    let windDir = 0, wSpeed = 25;
 
     function paint(ox, oz, colHex, hMod, feat) {
         const pos = groundGeo.attributes.position, col = groundGeo.attributes.color, r = 60, c = new THREE.Color(colHex);
@@ -217,17 +235,22 @@
         document.getElementById('tool'+t.charAt(0).toUpperCase()+t.slice(1)).classList.add('active');
     });
 
-    ['sunny', 'cloudy', 'rain'].forEach(w => document.getElementById('w-'+w).onclick = () => applyWeather(w));
+    ['sunny', 'cloudy', 'rain'].forEach(w => document.getElementById('w-'+w).onclick = () => {
+        weather = w; document.querySelectorAll('.w-btn').forEach(b => b.classList.remove('active'));
+        document.getElementById('w-'+w).classList.add('active');
+        rainSystem.visible = (w==='rain');
+    });
     document.getElementById('resetBtn').onclick = () => init(true);
     document.getElementById('simSpeed').oninput = e => { simSpeed = e.target.value; document.getElementById('simSpeedVal').innerText = simSpeed+'x'; };
+    document.getElementById('windSpeed').oninput = e => { wSpeed = e.target.value; document.getElementById('windSpeedVal').innerText = wSpeed; };
     init();
 
-    let wind = { x: 0, z: -1 }, wSpeed = 25;
     (function animate() {
         requestAnimationFrame(animate);
+        updateTimeAndWind();
         if(weather === 'rain') {
             const pos = rainGeo.attributes.position.array;
-            for(let i=1; i<pos.length; i+=3) { pos[i]-=10; if(pos[i]<0) pos[i]=1000; }
+            for(let i=1; i<pos.length; i+=3) { pos[i]-=15; if(pos[i]<0) pos[i]=1000; }
             rainGeo.attributes.position.needsUpdate = true;
         }
         for(let i=0; i<spatialMap.length; i++) spatialMap[i].length = 0;
@@ -240,14 +263,14 @@
         for(let i=0; i<CONFIG.count; i++) {
             const idx = i*8, state = data[idx+2]; if(state === S_CHARRED || state === S_CUT) continue;
             if(state === S_BURNING) {
-                data[idx+4] -= simSpeed * (weather === 'rain' ? 2.5 : 1.0); // Rain kills fire faster
+                data[idx+4] -= simSpeed * (weather === 'rain' ? 2.5 : 1.0);
                 if(data[idx+4] <= 0) {
                     data[idx+2] = S_CHARRED; mesh.setColorAt(i, new THREE.Color(0x111111));
                     mesh.getMatrixAt(i, _mat); _mat.decompose(_pos, _quat, _scale); _scale.y = 0.1; _mat.compose(_pos, _quat, _scale); mesh.setMatrixAt(i, _mat);
                 }
                 continue;
             }
-            if(weather === 'rain' && data[idx+3] < 150) data[idx+3] += 1.0 * simSpeed; // Rain restores moisture
+            if(weather === 'rain' && data[idx+3] < 150) data[idx+3] += 1.0 * simSpeed;
             
             const gx = Math.floor((data[idx]+mapOffset)/CONFIG.cellSize), gz = Math.floor((data[idx+1]+mapOffset)/CONFIG.cellSize);
             let heat = 0;
@@ -255,7 +278,10 @@
                 if(nx>=0 && nx<mapDim && nz>=0 && nz<mapDim) spatialMap[nz*mapDim+nx].forEach(fIdx => {
                     const dx = data[idx]-data[fIdx*8], dz = data[idx+1]-data[fIdx*8+1], dSq = dx*dx+dz*dz;
                     if(dSq < 900) {
-                        const dist = Math.sqrt(dSq), dot = (dx/dist)*wind.x + (dz/dist)*wind.z, slope = (data[idx+6]-data[fIdx*8+6])/(dist+0.1);
+                        const dist = Math.sqrt(dSq);
+                        const wx = Math.sin(windDir), wz = -Math.cos(windDir);
+                        const dot = (dx/dist)*wx + (dz/dist)*wz;
+                        const slope = (data[idx+6]-data[fIdx*8+6])/(dist+0.1);
                         heat += (1-dist/30) * (dot>0?1+dot*wSpeed*0.15:1+dot*0.8) * (slope>0?1+slope*6:1+slope) * FUEL_PROPS[data[fIdx*8+7]].spread;
                     }
                 });
