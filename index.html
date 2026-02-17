@@ -2,59 +2,63 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Wildfire Sim: Precision Tools</title>
+    <title>Wildfire Sim | Cinematic Edition</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #eef0f5; font-family: 'Segoe UI', sans-serif; }
+        body { 
+            margin: 0; 
+            overflow: hidden; 
+            background: linear-gradient(to bottom, #a1c4fd 0%, #c2e9fb 100%); 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+        }
         
         #ui {
-            position: absolute; top: 10px; left: 10px;
-            background: rgba(255, 255, 255, 0.95); color: #333;
-            padding: 15px; border-radius: 8px; border: 1px solid #ccc;
-            width: 290px; user-select: none;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-            max-height: 90vh; overflow-y: auto;
+            position: absolute; top: 20px; left: 20px;
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            color: #2c3e50;
+            padding: 20px; border-radius: 12px;
+            width: 280px; user-select: none;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+            max-height: 85vh; overflow-y: auto;
+            border: 1px solid rgba(255, 255, 255, 0.3);
         }
 
-        h3 { margin: 0 0 10px 0; color: #222; font-weight: 600; font-size: 16px; border-bottom: 2px solid #ddd; padding-bottom: 8px; }
-        
-        .control { margin-bottom: 15px; }
-        label { display: flex; justify-content: space-between; font-size: 11px; color: #666; margin-bottom: 5px; text-transform: uppercase; font-weight: bold; }
-        input[type=range] { width: 100%; cursor: pointer; accent-color: #d32f2f; }
+        h3 { margin: 0 0 15px 0; color: #1a2a3a; font-size: 18px; letter-spacing: 0.5px; border-bottom: 1px solid rgba(0,0,0,0.1); padding-bottom: 10px; }
+        .control { margin-bottom: 18px; }
+        label { display: flex; justify-content: space-between; font-size: 10px; color: #555; margin-bottom: 6px; text-transform: uppercase; font-weight: 800; }
+        input[type=range] { width: 100%; cursor: pointer; accent-color: #e67e22; }
         
         button { 
-            background: #f0f0f0; color: #333; border: 1px solid #ccc; 
-            padding: 8px; width: 100%; cursor: pointer; border-radius: 4px; 
-            font-size: 11px; text-transform: uppercase; font-weight: bold; transition: 0.2s;
-            margin-top: 5px;
+            background: #2c3e50; color: white; border: none; 
+            padding: 10px; width: 100%; cursor: pointer; border-radius: 6px; 
+            font-size: 11px; text-transform: uppercase; font-weight: bold; transition: 0.3s;
         }
-        button:hover { background: #e0e0e0; }
+        button:hover { background: #1a2a3a; transform: translateY(-1px); }
 
-        .val { color: #d32f2f; font-weight: 700; }
-        
-        /* Legend */
-        .legend { margin-top: 10px; border-top: 1px solid #eee; padding-top: 10px; font-size: 11px; }
-        .l-item { display: flex; align-items: center; margin-bottom: 4px; }
-        .box { width: 10px; height: 10px; margin-right: 8px; border-radius: 2px; }
+        .val { color: #e67e22; font-weight: 800; }
+        .legend { margin-top: 15px; font-size: 11px; background: rgba(0,0,0,0.05); padding: 10px; border-radius: 8px; }
+        .l-item { display: flex; align-items: center; margin-bottom: 6px; }
+        .box { width: 12px; height: 12px; margin-right: 10px; border-radius: 3px; }
 
         #toolbar {
-            position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
-            display: flex; gap: 15px; background: white; padding: 12px 20px;
-            border-radius: 50px; box-shadow: 0 5px 20px rgba(0,0,0,0.2);
+            position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%);
+            display: flex; gap: 20px; background: rgba(255,255,255,0.8); padding: 12px 25px;
+            border-radius: 50px; backdrop-filter: blur(10px); box-shadow: 0 10px 30px rgba(0,0,0,0.2);
         }
         .tool {
-            width: 50px; height: 50px; border-radius: 50%; border: 2px solid #eee;
-            background: white; cursor: pointer; font-size: 24px; display: flex;
-            align-items: center; justify-content: center; transition: 0.2s;
+            width: 55px; height: 55px; border-radius: 50%; border: 2px solid transparent;
+            background: white; cursor: pointer; font-size: 26px; display: flex;
+            align-items: center; justify-content: center; transition: 0.3s; box-shadow: 0 4px 6px rgba(0,0,0,0.05);
         }
-        .tool:hover { transform: scale(1.1); background: #f9f9f9; }
-        .tool.active { border-color: #d32f2f; background: #fff0f0; transform: scale(1.15); box-shadow: 0 0 10px rgba(211, 47, 47, 0.3); }
+        .tool:hover { transform: scale(1.1); box-shadow: 0 6px 12px rgba(0,0,0,0.1); }
+        .tool.active { border-color: #e67e22; background: #fffcf9; transform: scale(1.15); }
 
         #loading {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: #eef0f5; display: flex; justify-content: center; align-items: center;
-            font-size: 24px; color: #555; z-index: 999;
+            background: #f0f4f8; display: flex; justify-content: center; align-items: center;
+            font-size: 20px; font-weight: 300; color: #34495e; z-index: 999;
         }
-
     </style>
     <script type="importmap">
         {
@@ -67,23 +71,23 @@
 </head>
 <body>
 
-<div id="loading">Generating 100,000 Fuel Nodes...</div>
+<div id="loading">Simulating Landscape...</div>
 
 <div id="ui">
-    <h3>Advanced Fire Physics</h3>
+    <h3>Terrain Analysis</h3>
     
     <div class="control">
-        <label>Simulation Speed <span id="simSpeedVal" class="val">1.0x</span></label>
+        <label>Time Progression <span id="simSpeedVal" class="val">1.0x</span></label>
         <input type="range" id="simSpeed" min="0.1" max="5.0" step="0.1" value="1.0">
     </div>
 
     <div class="control">
-        <label>Wind Heading <span id="windDirVal" class="val">0° (N)</span></label>
+        <label>Wind Heading <span id="windDirVal" class="val">0°</span></label>
         <input type="range" id="windDir" min="0" max="360" value="0">
     </div>
     
     <div class="control">
-        <label>Wind Speed <span id="windSpeedVal" class="val">25</span></label>
+        <label>Wind Velocity <span id="windSpeedVal" class="val">25</span></label>
         <input type="range" id="windSpeed" min="0" max="80" value="25">
     </div>
 
@@ -92,485 +96,303 @@
         <input type="range" id="moisture" min="5" max="30" value="15">
     </div>
 
-    <button id="resetBtn">Regenerate Terrain</button>
+    <button id="resetBtn">Regenerate Grid</button>
 
     <div class="legend">
-        <strong>Fuel Models (Anderson):</strong>
-        <div class="l-item"><div class="box" style="background:#7cfc00"></div>Grass (Fast/Low Intensity)</div>
-        <div class="l-item"><div class="box" style="background:#556b2f"></div>Brush (Medium)</div>
-        <div class="l-item"><div class="box" style="background:#004d00"></div>Timber (Slow/High Intensity)</div>
+        <div class="l-item"><div class="box" style="background:#95a23e"></div>Dry Grasslands</div>
+        <div class="l-item"><div class="box" style="background:#6b8e23"></div>Highland Brush</div>
+        <div class="l-item"><div class="box" style="background:#2d4c1e"></div>Old Growth Timber</div>
     </div>
 </div>
 
 <div id="toolbar">
-    <div class="tool active" id="toolIgnite" title="Ignite Single Tree">🔥</div>
-    <div class="tool" id="toolCut" title="Precision Firebreak">🪓</div>
+    <div class="tool active" id="toolIgnite" title="Ignition Source">🔥</div>
+    <div class="tool" id="toolCut" title="Defensive Firebreak">🪓</div>
 </div>
 
 <script type="module">
     import * as THREE from 'three';
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+    import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+    import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 
-    // --- CONFIGURATION ---
+    // --- CONFIG ---
     const CONFIG = {
-        count: 100000,          
-        worldSize: 1500,        
-        cellSize: 20,
-        baseSpreadRate: 0.05,
-        dryingRate: 0.07,
+        count: 100000, worldSize: 1500, cellSize: 20,
+        baseSpreadRate: 0.05, dryingRate: 0.07,
     };
 
-    // States
-    const S_LIVE = 0;
-    const S_DRYING = 1;
-    const S_BURNING = 2;
-    const S_CHARRED = 3;
-    const S_CUT = 4;
-
-    // Fuel Types
-    const F_GRASS = 0;
-    const F_BRUSH = 1;
-    const F_TIMBER = 2;
+    const S_LIVE = 0, S_DRYING = 1, S_BURNING = 2, S_CHARRED = 3, S_CUT = 4;
+    const F_GRASS = 0, F_BRUSH = 1, F_TIMBER = 2;
 
     const FUEL_PROPS = {
-        [F_GRASS]:  { spread: 2.5, burn: 0.4,  scaleY: 0.3, scaleXZ: 0.6, col: 0x7cfc00 }, 
-        [F_BRUSH]:  { spread: 1.0, burn: 1.0,  scaleY: 0.8, scaleXZ: 1.0, col: 0x556b2f }, 
-        [F_TIMBER]: { spread: 0.4, burn: 3.5,  scaleY: 1.8, scaleXZ: 1.2, col: 0x004d00 }  
+        [F_GRASS]:  { spread: 2.5, burn: 0.4,  scaleY: 0.3, scaleXZ: 0.6, col: 0x95a23e }, 
+        [F_BRUSH]:  { spread: 1.0, burn: 1.0,  scaleY: 0.8, scaleXZ: 1.0, col: 0x6b8e23 }, 
+        [F_TIMBER]: { spread: 0.4, burn: 3.5,  scaleY: 1.8, scaleXZ: 1.2, col: 0x2d4c1e }  
     };
 
     let currentTool = 'ignite';
     let simSpeedMultiplier = 1.0;
 
-    // --- SCENE ---
+    // --- SCENE & POST PROCESSING ---
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0xeef0f5);
+    scene.background = new THREE.Color(0xa1c4fd); 
+    scene.fog = new THREE.FogExp2(0xa1c4fd, 0.00018);
 
     const camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 5, 6000);
-    camera.position.set(0, 1600, 1300);
+    camera.position.set(0, 1400, 1200);
     
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
     renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.toneMapping = THREE.ReinhardToneMapping;
     document.body.appendChild(renderer.domElement);
+
+    // Bloom Setup
+    const renderScene = new RenderPass(scene, camera);
+    const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
+    bloomPass.threshold = 0.25; 
+    bloomPass.strength = 1.2; // Glow intensity
+    bloomPass.radius = 0.5;
+
+    const composer = new EffectComposer(renderer);
+    composer.addPass(renderScene);
+    composer.addPass(bloomPass);
 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
-    controls.maxPolarAngle = Math.PI / 2 - 0.05;
-    controls.maxDistance = 3500;
+    controls.maxPolarAngle = Math.PI / 2.1;
 
     // --- LIGHTING ---
-    const hemiLight = new THREE.HemisphereLight(0xffffff, 0xffffff, 0.6);
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x4f4f2f, 0.9);
     scene.add(hemiLight);
-    const sun = new THREE.DirectionalLight(0xffaa33, 1.2);
+    const sun = new THREE.DirectionalLight(0xfff5e1, 1.2);
     sun.position.set(400, 700, 300);
-    sun.castShadow = true;
-    sun.shadow.mapSize.set(4096, 4096); 
-    sun.shadow.camera.left = -900; sun.shadow.camera.right = 900;
-    sun.shadow.camera.top = 900; sun.shadow.camera.bottom = -900;
     scene.add(sun);
 
-    // --- TERRAIN GENERATION ---
-    function getElevation(x, z) {
-        return Math.sin(x*0.005)*30 + Math.cos(z*0.004)*30 + Math.sin(x*0.01 + z*0.01)*15;
-    }
-
-    function isRiver(x, z) {
-        const center = Math.sin(z * 0.003) * 80 - 300; 
-        return Math.abs(x - center) < 25;
-    }
-
-    function isRoad(x, z) {
-        const center = Math.sin(z * 0.002) * 40 + 300;
-        return Math.abs(x - center) < 6; 
-    }
-
+    // --- TERRAIN ---
+    function getElevation(x, z) { return Math.sin(x*0.005)*30 + Math.cos(z*0.004)*30 + Math.sin(x*0.01 + z*0.01)*15; }
+    function isRiver(x, z) { return Math.abs(x - (Math.sin(z * 0.003) * 80 - 300)) < 25; }
+    function isRoad(x, z) { return Math.abs(x - (Math.sin(z * 0.002) * 40 + 300)) < 6; }
     function getFuelType(x, z) {
-        const n = Math.sin(x*0.003) + Math.cos(z*0.003); 
-        if (n > 0.8) return F_TIMBER; 
-        if (n < -0.5) return F_GRASS; 
-        return F_BRUSH; 
+        const n = Math.sin(x*0.003) + Math.cos(z*0.003);
+        if (n > 0.8) return F_TIMBER;
+        if (n < -0.5) return F_GRASS;
+        return F_BRUSH;
     }
 
-    // --- GROUND MESH ---
-    const groundGeo = new THREE.PlaneGeometry(1800, 1800, 300, 300);
-    const count = groundGeo.attributes.position.count;
-    groundGeo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(count * 3), 3));
-    
-    const pos = groundGeo.attributes.position;
-    const col = groundGeo.attributes.color;
+    const groundGeo = new THREE.PlaneGeometry(1800, 1800, 200, 200);
+    const gCount = groundGeo.attributes.position.count;
+    groundGeo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(gCount * 3), 3));
+    const gPos = groundGeo.attributes.position;
+    const gCol = groundGeo.attributes.color;
     const _c = new THREE.Color();
 
-    for(let i=0; i<count; i++){
-        const x = pos.getX(i);
-        const y = pos.getY(i);
-        
+    for(let i=0; i<gCount; i++){
+        const x = gPos.getX(i), y = gPos.getY(i);
         let h = getElevation(x, -y);
         const fType = getFuelType(x, -y);
-        if(fType === F_GRASS) _c.setHex(0x9acd32); 
-        else if(fType === F_TIMBER) _c.setHex(0x2f4f4f); 
-        else _c.setHex(0x5c6b45); 
+        if(fType === F_GRASS) _c.setHex(0xadc44f); 
+        else if(fType === F_TIMBER) _c.setHex(0x3d5a2d);
+        else _c.setHex(0x5a7a44);
 
-        if(isRiver(x, -y)) {
-            h -= 12; 
-            _c.setHex(0x4da6ff);
-        } else if(isRoad(x, -y)) {
-            h += 0.5;
-            _c.setHex(0x777777);
-        }
+        if(isRiver(x, -y)) { h -= 12; _c.setHex(0x2b65ec); }
+        else if(isRoad(x, -y)) { h += 0.5; _c.setHex(0x444444); }
 
-        pos.setZ(i, h);
-        col.setXYZ(i, _c.r, _c.g, _c.b);
+        gPos.setZ(i, h);
+        gCol.setXYZ(i, _c.r, _c.g, _c.b);
     }
-    
     groundGeo.computeVertexNormals();
-    const groundMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9 });
-    const ground = new THREE.Mesh(groundGeo, groundMat);
+    const ground = new THREE.Mesh(groundGeo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8 }));
     ground.rotation.x = -Math.PI/2;
-    ground.receiveShadow = true;
     scene.add(ground);
 
-    const arrowHelper = new THREE.ArrowHelper(new THREE.Vector3(0,0,-1), new THREE.Vector3(0,100,0), 100, 0xd32f2f);
+    const arrowHelper = new THREE.ArrowHelper(new THREE.Vector3(0,0,-1), new THREE.Vector3(0,150,0), 100, 0xe67e22);
     scene.add(arrowHelper);
 
     // --- TREES ---
-    const treeGeo = new THREE.CylinderGeometry(0, 1.8, 7, 4); 
+    const treeGeo = new THREE.CylinderGeometry(0, 1.8, 7, 4);
     treeGeo.translate(0, 3.5, 0);
-    const treeMat = new THREE.MeshStandardMaterial({ color: 0xffffff, flatShading: true, roughness: 0.8 });
-    const mesh = new THREE.InstancedMesh(treeGeo, treeMat, CONFIG.count);
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
+    const mesh = new THREE.InstancedMesh(treeGeo, new THREE.MeshStandardMaterial({ color: 0xffffff, flatShading: true }), CONFIG.count);
     scene.add(mesh);
 
-    // Data Structures
-    const STRIDE = 8;
-    let data = new Float32Array(CONFIG.count * STRIDE);
+    let data = new Float32Array(CONFIG.count * 8);
     let spatialMap = [];
     const mapDim = Math.ceil(CONFIG.worldSize / CONFIG.cellSize) + 2;
     const mapOffset = CONFIG.worldSize / 2;
 
-    const _mat = new THREE.Matrix4();
-    const _pos = new THREE.Vector3();
-    const _scale = new THREE.Vector3();
-    const _quat = new THREE.Quaternion();
-    const _col = new THREE.Color();
-    
-    let windVec = { x: 0, z: -1 };
-    let windSpeed = 25;
-    let baseMoisture = 15;
+    const _mat = new THREE.Matrix4(), _vpos = new THREE.Vector3(), _vscale = new THREE.Vector3(), _vquat = new THREE.Quaternion(), _vcol = new THREE.Color();
+    let windVec = { x: 0, z: -1 }, windSpeed = 25, baseMoisture = 15;
 
     function init() {
         document.getElementById('loading').style.display = 'flex';
-        
         setTimeout(() => {
             spatialMap = new Array(mapDim*mapDim).fill(0).map(()=>[]);
-            
             for(let i=0; i<CONFIG.count; i++) {
-                const idx = i * STRIDE;
-                const x = (Math.random()-0.5) * CONFIG.worldSize;
-                const z = (Math.random()-0.5) * CONFIG.worldSize;
-                
+                const idx = i * 8, x = (Math.random()-0.5) * CONFIG.worldSize, z = (Math.random()-0.5) * CONFIG.worldSize;
                 if (isRiver(x, z) || isRoad(x, z)) {
                     data[idx+6] = -100; data[idx+2] = S_CHARRED;
-                    _mat.makeScale(0,0,0); mesh.setMatrixAt(i, _mat);
-                    continue;
+                    _mat.makeScale(0,0,0); mesh.setMatrixAt(i, _mat); continue;
                 }
-
-                const y = getElevation(x, z);
-                const type = getFuelType(x, z);
-                const props = FUEL_PROPS[type];
-
-                data[idx] = x;
-                data[idx+1] = z;
-                data[idx+2] = S_LIVE;
-                data[idx+3] = baseMoisture * 10; 
-                data[idx+4] = (3000 * props.burn) * (0.8 + Math.random()*0.4);
-                data[idx+5] = 1.0; 
-                data[idx+6] = y;
-                data[idx+7] = type; 
-
-                _pos.set(x, y, z);
-                
-                const sY = props.scaleY * (0.8 + Math.random()*0.4);
-                const sXZ = props.scaleXZ * (0.8 + Math.random()*0.4);
-                _scale.set(sXZ, sY, sXZ);
-                
-                _quat.setFromAxisAngle(new THREE.Vector3(0,1,0), Math.random()*Math.PI*2);
-                _mat.compose(_pos, _quat, _scale);
+                const y = getElevation(x, z), type = getFuelType(x, z), props = FUEL_PROPS[type];
+                data[idx] = x; data[idx+1] = z; data[idx+2] = S_LIVE; data[idx+3] = baseMoisture * 10;
+                data[idx+4] = (3000 * props.burn) * (0.8 + Math.random()*0.4); data[idx+6] = y; data[idx+7] = type;
+                _vpos.set(x, y, z);
+                const sY = props.scaleY * (0.8 + Math.random()*0.4), sXZ = props.scaleXZ * (0.8 + Math.random()*0.4);
+                _vscale.set(sXZ, sY, sXZ);
+                _vquat.setFromAxisAngle(new THREE.Vector3(0,1,0), Math.random()*Math.PI*2);
+                _mat.compose(_vpos, _vquat, _vscale);
                 mesh.setMatrixAt(i, _mat);
                 mesh.setColorAt(i, new THREE.Color(props.col));
             }
             mesh.instanceMatrix.needsUpdate = true;
             mesh.instanceColor.needsUpdate = true;
-            
             document.getElementById('loading').style.display = 'none';
         }, 100);
     }
 
-    // --- INTERACTION ---
-    const raycaster = new THREE.Raycaster();
-    const mouse = new THREE.Vector2();
-    let isDragging = false;
-
-    window.addEventListener('mousedown', e => {
-        if(e.target.tagName !== 'CANVAS') return;
-        isDragging = true;
-        handleInput(e);
-    });
-    window.addEventListener('mousemove', e => { if(isDragging) handleInput(e); });
-    window.addEventListener('mouseup', () => isDragging = false);
-
-    function handleInput(e) {
-        mouse.x = (e.clientX/window.innerWidth)*2-1;
-        mouse.y = -(e.clientY/window.innerHeight)*2+1;
-        raycaster.setFromCamera(mouse, camera);
-        const hits = raycaster.intersectObject(ground);
-        if(hits.length > 0) {
-            const pt = hits[0].point;
-            if(currentTool === 'ignite') {
-                if(!isRiver(pt.x, pt.z)) igniteOne(pt.x, pt.z);
-            } else if(currentTool === 'cut') {
-                cutLine(pt.x, pt.z);
-            }
-        }
-    }
-
-    // IGNITE ONE: Finds nearest tree
-    function igniteOne(ox, oz) {
-        let closestIdx = -1;
-        let minDistSq = Infinity;
-        const searchRadiusSq = 900; // Search within 30 units
-
-        for(let i=0; i<CONFIG.count; i++) {
-            const idx = i*STRIDE;
-            if(data[idx+6] < -50) continue; // Skip hidden/dead
-
-            const dx = data[idx]-ox;
-            const dz = data[idx+1]-oz;
-            const dSq = dx*dx + dz*dz;
-
-            if(dSq < searchRadiusSq) {
-                if(dSq < minDistSq) {
-                    minDistSq = dSq;
-                    closestIdx = idx;
-                }
-            }
-        }
-
-        // Ignite closest only
-        if(closestIdx !== -1) {
-            data[closestIdx+2] = S_BURNING;
-            data[closestIdx+3] = 0;
-        }
-    }
-
-    function cutLine(ox, oz) {
-        let needsUpdate = false;
-        // REDUCED BRUSH SIZE by 50% again (Radius ~7.5)
-        const radiusSq = 56; 
-        for(let i=0; i<CONFIG.count; i++) {
-            const idx = i*STRIDE;
-            if(data[idx+6] < -50) continue;
-            const dx = data[idx]-ox;
-            const dz = data[idx+1]-oz;
-            if(dx*dx + dz*dz < radiusSq) { 
-                data[idx+2] = S_CUT;
-                _mat.makeScale(0,0,0);
-                mesh.setMatrixAt(i, _mat);
-                needsUpdate = true;
-            }
-        }
-        if(needsUpdate) mesh.instanceMatrix.needsUpdate = true;
-    }
-
-    // --- PHYSICS (Speed Controlled) ---
+    // --- PHYSICS ---
     function updatePhysics() {
         for(let i=0; i<spatialMap.length; i++) spatialMap[i].length = 0;
-        
         let burningCount = 0;
         for(let i=0; i<CONFIG.count; i++) {
-            if(data[i*STRIDE + 2] === S_BURNING) {
+            if(data[i*8 + 2] === S_BURNING) {
                 burningCount++;
-                const gx = Math.floor((data[i*STRIDE] + mapOffset) / CONFIG.cellSize);
-                const gz = Math.floor((data[i*STRIDE+1] + mapOffset) / CONFIG.cellSize);
-                if(gx>=0 && gx<mapDim && gz>=0 && gz<mapDim) {
-                    spatialMap[gz*mapDim + gx].push(i);
-                }
+                const gx = Math.floor((data[i*8] + mapOffset) / CONFIG.cellSize), gz = Math.floor((data[i*8+1] + mapOffset) / CONFIG.cellSize);
+                if(gx>=0 && gx<mapDim && gz>=0 && gz<mapDim) spatialMap[gz*mapDim + gx].push(i);
             }
         }
-
         if(burningCount === 0) return;
 
-        let needColor = false;
-        let needMatrix = false;
-
+        let needColor = false, needMatrix = false;
         for(let i=0; i<CONFIG.count; i++) {
-            const idx = i * STRIDE;
-            const state = data[idx+2];
-
+            const idx = i * 8, state = data[idx+2];
             if(state === S_CHARRED || state === S_CUT) continue;
 
             if(state === S_BURNING) {
-                data[idx+4] -= 1.0 * simSpeedMultiplier; 
-                
+                data[idx+4] -= 1.0 * simSpeedMultiplier;
                 if(data[idx+4] <= 0) {
                     data[idx+2] = S_CHARRED;
-                    mesh.setColorAt(i, new THREE.Color(0x111111));
-                    
-                    const type = data[idx+7];
-                    const props = FUEL_PROPS[type];
-                    _pos.set(data[idx], data[idx+6], data[idx+1]);
-                    _scale.set(props.scaleXZ, 0.1, props.scaleXZ);
-                    _quat.set(0,0,0,1);
-                    _mat.compose(_pos, _quat, _scale);
+                    mesh.setColorAt(i, new THREE.Color(0x1a1a1a));
+                    _vpos.set(data[idx], data[idx+6], data[idx+1]);
+                    _vscale.set(FUEL_PROPS[data[idx+7]].scaleXZ, 0.1, FUEL_PROPS[data[idx+7]].scaleXZ);
+                    _mat.compose(_vpos, new THREE.Quaternion(0,0,0,1), _vscale);
                     mesh.setMatrixAt(i, _mat);
                     needColor = true; needMatrix = true;
-                } else {
-                    if(Math.random() > 0.95) { 
-                        const flicker = 0.5 + Math.random()*0.5;
-                        _col.setHSL(0.05 + Math.random()*0.05, 1.0, flicker * 0.6);
-                        mesh.setColorAt(i, _col);
-                        needColor = true;
-                    }
+                } else if(Math.random() > 0.9) {
+                    // GLOW COLORS: Using high intensity RGB values (over 1.0) to trigger Bloom
+                    const flicker = 1.0 + Math.random() * 2.0; 
+                    _vcol.setRGB(1.0 * flicker, 0.4 * flicker, 0.1); 
+                    mesh.setColorAt(i, _vcol);
+                    needColor = true;
                 }
                 continue;
             }
 
-            const tx = data[idx];
-            const tz = data[idx+1];
-            const ty = data[idx+6]; 
-            const gx = Math.floor((tx + mapOffset) / CONFIG.cellSize);
-            const gz = Math.floor((tz + mapOffset) / CONFIG.cellSize);
+            const tx = data[idx], tz = data[idx+1], ty = data[idx+6];
+            const gx = Math.floor((tx + mapOffset) / CONFIG.cellSize), gz = Math.floor((tz + mapOffset) / CONFIG.cellSize);
             
             let incomingHeat = 0;
-            let neighborsHaveFire = false;
-             for(let nz = gz-1; nz <= gz+1; nz++) {
-                for(let nx = gx-1; nx <= gx+1; nx++) {
-                    if(nx>=0 && nx<mapDim && nz>=0 && nz<mapDim) {
-                         if(spatialMap[nz*mapDim+nx].length > 0) neighborsHaveFire = true;
-                    }
-                }
-            }
-            if(!neighborsHaveFire) continue;
-
             for(let nz = gz-1; nz <= gz+1; nz++) {
                 for(let nx = gx-1; nx <= gx+1; nx++) {
                     if(nx<0 || nx>=mapDim || nz<0 || nz>=mapDim) continue;
                     const cell = spatialMap[nz*mapDim+nx];
-                    
                     for(let k=0; k<cell.length; k++) {
-                        const neighborIdx = cell[k] * STRIDE;
-                        
-                        const dx = tx - data[neighborIdx];
-                        const dz = tz - data[neighborIdx+1];
-                        const dy = ty - data[neighborIdx+6]; 
-                        const distSq = dx*dx + dz*dz;
-                        
-                        if(distSq < 900) { 
-                            const dist = Math.sqrt(distSq);
-                            const nx_dir = dx/dist;
-                            const nz_dir = dz/dist;
-                            const dot = nx_dir * windVec.x + nz_dir * windVec.z;
-                            
-                            let windBias = 1.0;
-                            if(dot > 0) windBias = 1.0 + (dot * (windSpeed * 0.15)); 
-                            else {
-                                windBias = 1.0 + (dot * 0.8); 
-                                if(windBias < 0.1) windBias = 0.1;
-                            }
-
-                            const slope = dy / (dist + 0.1); 
-                            let slopeFactor = 1.0;
-                            if(slope > 0) slopeFactor = 1.0 + (slope * 6.0); 
-                            else {
-                                slopeFactor = 1.0 + (slope * 1.0); 
-                                if(slopeFactor < 0.2) slopeFactor = 0.2;
-                            }
-
-                            const neighborType = data[neighborIdx+7];
-                            const spreadMod = FUEL_PROPS[neighborType].spread;
-
-                            const intensity = (1.0 - dist/30) * windBias * slopeFactor * spreadMod; 
-                            
-                            if(intensity > 0) incomingHeat += intensity * CONFIG.baseSpreadRate * simSpeedMultiplier;
+                        const nIdx = cell[k] * 8;
+                        const dx = tx - data[nIdx], dz = tz - data[nIdx+1], dy = ty - data[nIdx+6];
+                        const dSq = dx*dx + dz*dz;
+                        if(dSq < 900) {
+                            const d = Math.sqrt(dSq), dot = (dx/d) * windVec.x + (dz/d) * windVec.z;
+                            let wB = 1.0 + (dot > 0 ? dot * windSpeed * 0.15 : dot * 0.8);
+                            let sB = 1.0 + (dy/(d+0.1) > 0 ? (dy/(d+0.1))*6.0 : (dy/(d+0.1)));
+                            incomingHeat += Math.max(0.1, (1.0 - d/30) * wB * Math.max(0.2, sB) * FUEL_PROPS[data[nIdx+7]].spread) * CONFIG.baseSpreadRate * simSpeedMultiplier;
                         }
                     }
                 }
             }
 
             if(incomingHeat > 0) {
-                data[idx+3] -= incomingHeat * CONFIG.dryingRate; 
+                data[idx+3] -= incomingHeat * CONFIG.dryingRate;
                 if(state === S_LIVE && data[idx+3] < baseMoisture * 5) {
                     data[idx+2] = S_DRYING;
-                    mesh.setColorAt(i, new THREE.Color(0xb8860b)); 
-                    needColor = true;
+                    mesh.setColorAt(i, new THREE.Color(0xb8860b)); needColor = true;
                 }
                 if(data[idx+3] <= 0) {
                     data[idx+2] = S_BURNING;
-                    mesh.setColorAt(i, new THREE.Color(0xff4500)); 
+                    mesh.setColorAt(i, new THREE.Color(2.0, 1.0, 0.0)); // Initial bright ignition flash
                     needColor = true;
                 }
             }
         }
-
         if(needColor) mesh.instanceColor.needsUpdate = true;
         if(needMatrix) mesh.instanceMatrix.needsUpdate = true;
     }
 
-    // --- UI LOGIC ---
-    function updateInputs() {
-        const d = parseInt(document.getElementById('windDir').value);
-        const s = parseInt(document.getElementById('windSpeed').value);
-        const m = parseInt(document.getElementById('moisture').value);
-        simSpeedMultiplier = parseFloat(document.getElementById('simSpeed').value);
+    // --- INTERACTION ---
+    const raycaster = new THREE.Raycaster(), mouse = new THREE.Vector2();
+    let isDragging = false;
+    window.addEventListener('mousedown', e => { if(e.target.tagName==='CANVAS'){isDragging=true; handleInput(e);}});
+    window.addEventListener('mousemove', e => { if(isDragging) handleInput(e); });
+    window.addEventListener('mouseup', () => isDragging = false);
 
+    function handleInput(e) {
+        mouse.x = (e.clientX/window.innerWidth)*2-1; mouse.y = -(e.clientY/window.innerHeight)*2+1;
+        raycaster.setFromCamera(mouse, camera);
+        const hits = raycaster.intersectObject(ground);
+        if(hits.length > 0) {
+            const pt = hits[0].point;
+            if(currentTool === 'ignite') {
+                let bestIdx = -1, minDist = Infinity;
+                for(let i=0; i<CONFIG.count; i++) {
+                    const dSq = Math.pow(data[i*8]-pt.x,2) + Math.pow(data[i*8+1]-pt.z,2);
+                    if(dSq < 900 && dSq < minDist) { minDist = dSq; bestIdx = i*8; }
+                }
+                if(bestIdx !== -1) { data[bestIdx+2] = S_BURNING; data[bestIdx+3] = 0; }
+            } else {
+                for(let i=0; i<CONFIG.count; i++) {
+                    if(Math.pow(data[i*8]-pt.x,2) + Math.pow(data[i*8+1]-pt.z,2) < 60) {
+                        data[i*8+2] = S_CUT; _mat.makeScale(0,0,0); mesh.setMatrixAt(i, _mat);
+                    }
+                }
+                mesh.instanceMatrix.needsUpdate = true;
+            }
+        }
+    }
+
+    function updateInputs() {
+        const d = parseInt(document.getElementById('windDir').value), s = parseInt(document.getElementById('windSpeed').value), m = parseInt(document.getElementById('moisture').value);
+        simSpeedMultiplier = parseFloat(document.getElementById('simSpeed').value);
         document.getElementById('windDirVal').textContent = d + "°";
         document.getElementById('windSpeedVal').textContent = s;
         document.getElementById('moistureVal').textContent = m + "%";
         document.getElementById('simSpeedVal').textContent = simSpeedMultiplier.toFixed(1) + "x";
-
-        const rad = d * (Math.PI/180);
-        windVec.x = Math.sin(rad);
-        windVec.z = -Math.cos(rad);
-        windSpeed = s;
-        baseMoisture = m;
+        windVec.x = Math.sin(d * Math.PI/180); windVec.z = -Math.cos(d * Math.PI/180);
+        windSpeed = s; baseMoisture = m;
         arrowHelper.setDirection(new THREE.Vector3(windVec.x, 0, windVec.z));
         arrowHelper.setLength(60 + s);
     }
 
-    const tIgnite = document.getElementById('toolIgnite');
-    const tCut = document.getElementById('toolCut');
-    
-    tIgnite.addEventListener('click', () => {
-        currentTool = 'ignite'; tIgnite.classList.add('active'); tCut.classList.remove('active');
-    });
-    tCut.addEventListener('click', () => {
-        currentTool = 'cut'; tCut.classList.add('active'); tIgnite.classList.remove('active');
-    });
+    document.querySelectorAll('.tool').forEach(t => t.addEventListener('click', () => {
+        document.querySelectorAll('.tool').forEach(r => r.classList.remove('active'));
+        t.classList.add('active'); currentTool = t.id === 'toolIgnite' ? 'ignite' : 'cut';
+    }));
 
-    document.getElementById('windDir').addEventListener('input', updateInputs);
-    document.getElementById('windSpeed').addEventListener('input', updateInputs);
-    document.getElementById('moisture').addEventListener('input', updateInputs);
-    document.getElementById('simSpeed').addEventListener('input', updateInputs);
+    ['windDir','windSpeed','moisture','simSpeed'].forEach(id => document.getElementById(id).addEventListener('input', updateInputs));
     document.getElementById('resetBtn').addEventListener('click', init);
-
     window.addEventListener('resize', () => {
-        camera.aspect = window.innerWidth/window.innerHeight;
-        camera.updateProjectionMatrix();
-        renderer.setSize(window.innerWidth, window.innerHeight);
+        camera.aspect = window.innerWidth/window.innerHeight; camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight); composer.setSize(window.innerWidth, window.innerHeight);
     });
 
-    init();
-    updateInputs();
-
+    init(); updateInputs();
     function animate() {
         requestAnimationFrame(animate);
         updatePhysics();
         controls.update();
-        renderer.render(scene, camera);
+        composer.render(); // Use composer instead of renderer for Bloom
     }
     animate();
-
 </script>
 </body>
 </html>
