@@ -2,276 +2,571 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>DFRP Wildfire Simulator v1.5 - Urban 3D</title>
+    <title>DFRP Wildfire Simulator v1.5 - Urban Expansion</title>
     <style>
         body { margin: 0; overflow: hidden; background: #eef0f5; font-family: 'Segoe UI', sans-serif; }
+        
+        /* --- SPLASH SCREEN STYLES --- */
         #splashScreen {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: #111 url('https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?q=80&w=2000') no-repeat center center;
-            background-size: cover; z-index: 2000; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: opacity 0.8s ease-out;
+            background: #111 url('https://images.unsplash.com/photo-1542332213-31f87348857f?q=80&w=2070') no-repeat center center;
+            background-size: cover;
+            z-index: 2000;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            transition: opacity 0.8s ease-out;
         }
-        #splashOverlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.6); z-index: -1; }
-        .splash-content { text-align: center; color: white; z-index: 1; animation: fadeIn 1.5s ease-out; }
-        .splash-content h1 { font-size: 3.5rem; margin-bottom: 10px; text-shadow: 0 4px 10px rgba(0,0,0,0.5); letter-spacing: 2px; }
-        #startAppBtn { padding: 15px 50px; font-size: 18px; font-weight: bold; text-transform: uppercase; background: #d32f2f; color: white; border: none; border-radius: 50px; cursor: pointer; box-shadow: 0 0 20px rgba(211, 47, 47, 0.6); transition: 0.2s; }
-        #startAppBtn:hover { background: #b71c1c; transform: scale(1.05); }
+        #splashOverlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.6); z-index: -1;
+        }
+        .splash-content {
+            text-align: center; color: white; z-index: 1;
+            animation: fadeIn 1.5s ease-out;
+        }
+        .splash-content h1 {
+            font-size: 3.5rem; margin-bottom: 10px; text-shadow: 0 4px 10px rgba(0,0,0,0.5);
+            letter-spacing: 2px;
+        }
+        .splash-content p { font-size: 1.2rem; color: #ddd; margin-bottom: 40px; }
+        #startAppBtn {
+            padding: 15px 50px; font-size: 18px; font-weight: bold; text-transform: uppercase;
+            background: #d32f2f; color: white; border: none; border-radius: 50px;
+            cursor: pointer; box-shadow: 0 0 20px rgba(211, 47, 47, 0.6);
+            transition: transform 0.2s, background 0.2s, box-shadow 0.2s;
+        }
+        #startAppBtn:hover {
+            background: #b71c1c; transform: scale(1.05); box-shadow: 0 0 30px rgba(211, 47, 47, 0.9);
+        }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
 
-        #ui { position: absolute; top: 10px; left: 10px; background: rgba(255, 255, 255, 0.95); padding: 15px; border-radius: 8px; width: 290px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); z-index: 10; font-size: 12px; }
+        /* --- UI STYLES --- */
+        #ui {
+            position: absolute; top: 10px; left: 10px;
+            background: rgba(255, 255, 255, 0.95); color: #333;
+            padding: 15px; border-radius: 8px; border: 1px solid #ccc;
+            width: 290px; user-select: none;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            max-height: 90vh; overflow-y: auto; z-index: 10;
+        }
         .header-row { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #ddd; padding-bottom: 8px; margin-bottom: 10px; }
+        h3 { margin: 0; color: #222; font-weight: 600; font-size: 16px; }
+        #mainHelpBtn {
+            background: #333; color: white; border: none; border-radius: 4px;
+            width: 24px; height: 24px; cursor: pointer; font-weight: bold;
+            display: flex; align-items: center; justify-content: center;
+        }
+        #mainHelpBtn:hover { background: #d32f2f; }
         .control { margin-bottom: 15px; }
-        label { display: flex; justify-content: space-between; font-weight: bold; color: #666; text-transform: uppercase; font-size: 10px; margin-bottom: 5px; }
-        input[type=range] { width: 100%; accent-color: #d32f2f; }
-        .val { color: #d32f2f; font-weight: 700; }
-        button#resetBtn { background: #f0f0f0; border: 1px solid #ccc; padding: 8px; width: 100%; cursor: pointer; font-weight: bold; border-radius: 4px; }
-        
-        #toolbar { position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); display: flex; gap: 15px; background: white; padding: 12px 20px; border-radius: 50px; box-shadow: 0 5px 20px rgba(0,0,0,0.2); z-index: 100; align-items: center; }
-        .tool { width: 50px; height: 50px; border-radius: 50%; border: 2px solid #eee; background: white; cursor: pointer; font-size: 24px; display: flex; align-items: center; justify-content: center; transition: 0.2s; }
-        .tool.active { border-color: #d32f2f; background: #fff0f0; transform: scale(1.1); }
-        #compass { width: 50px; height: 50px; border-radius: 50%; background: #222; display: flex; align-items: center; justify-content: center; }
-        #loading { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #eef0f5; display: flex; justify-content: center; align-items: center; font-size: 20px; z-index: 999; }
+        label { display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: #666; margin-bottom: 5px; text-transform: uppercase; font-weight: bold; }
+        input[type=range] { width: 100%; cursor: pointer; accent-color: #d32f2f; }
+        button#resetBtn { 
+            background: #f0f0f0; color: #333; border: 1px solid #ccc; 
+            padding: 8px; width: 100%; cursor: pointer; border-radius: 4px; 
+            font-size: 11px; text-transform: uppercase; font-weight: bold; transition: 0.2s;
+            margin-top: 5px;
+        }
+        button#resetBtn:hover { background: #e0e0e0; }
+        .val { color: #d32f2f; font-weight: 700; margin-left: auto; margin-right: 8px; }
+        .info-trigger {
+            background: #999; color: white; border-radius: 50%; width: 14px; height: 14px;
+            display: inline-flex; align-items: center; justify-content: center;
+            font-size: 9px; cursor: pointer; transition: 0.2s; border: none;
+        }
+        .info-trigger:hover { background: #d32f2f; }
+
+        /* Modal Overlay */
+        .modal-overlay {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.7); z-index: 2100; justify-content: center; align-items: center;
+            padding: 20px; box-sizing: border-box; backdrop-filter: blur(4px);
+        }
+        .modal-content {
+            background: white; padding: 30px; border-radius: 12px; max-width: 650px; width: 100%;
+            max-height: 85vh; overflow-y: auto; position: relative; line-height: 1.6; font-size: 14px; color: #444;
+        }
+        .close-modal { position: absolute; top: 15px; right: 15px; font-size: 24px; cursor: pointer; color: #999; }
+        .close-modal:hover { color: #d32f2f; }
+        .modal-content h2 { margin-top: 0; color: #d32f2f; border-bottom: 1px solid #eee; padding-bottom: 15px; }
+        .modal-content h4 { color: #222; margin: 20px 0 8px 0; font-size: 16px; }
+        .modal-content ul { padding-left: 20px; margin-top: 5px; }
+        .key-instruction { display: flex; align-items: center; margin-bottom: 8px; }
+        .key-icon { background: #eee; padding: 2px 8px; border-radius: 4px; font-weight: bold; border: 1px solid #ccc; margin-right: 10px; font-size: 12px; }
+
+        .legend { margin-top: 10px; border-top: 1px solid #eee; padding-top: 10px; font-size: 11px; }
+        .l-item { display: flex; align-items: center; margin-bottom: 4px; }
+        .box { width: 10px; height: 10px; margin-right: 8px; border-radius: 2px; }
+
+        /* Toolbar & Compass */
+        #toolbar {
+            position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
+            display: flex; gap: 15px; background: white; padding: 12px 20px;
+            border-radius: 50px; box-shadow: 0 5px 20px rgba(0,0,0,0.2);
+            z-index: 100; align-items: center;
+        }
+        .tool {
+            width: 60px; height: 60px; border-radius: 50%; border: 2px solid #eee;
+            background: white; cursor: pointer; font-size: 28px; display: flex;
+            align-items: center; justify-content: center; transition: 0.2s;
+        }
+        .tool:hover { transform: scale(1.1); background: #f9f9f9; }
+        .tool.active { border-color: #d32f2f; background: #fff0f0; transform: scale(1.15); box-shadow: 0 0 15px rgba(211, 47, 47, 0.4); }
+
+        #compass {
+            width: 60px; height: 60px; border-radius: 50%;
+            background: #222; border: 2px solid #444;
+            display: flex; align-items: center; justify-content: center;
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
+        }
+        #compassSvg { width: 100%; height: 100%; will-change: transform; }
+
+        #loading {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: #eef0f5; display: flex; flex-direction: column; justify-content: center; align-items: center;
+            font-size: 24px; color: #555; z-index: 999;
+        }
     </style>
     <script type="importmap">
-        { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js", "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/" } }
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
     </script>
 </head>
 <body>
 
-<div id="splashScreen"><div id="splashOverlay"></div><div class="splash-content"><h1>DFRP WILDFIRE SIM</h1><p>Urban Expansion Update v1.6</p><button id="startAppBtn">Start Simulation</button></div></div>
-<div id="loading">Architecting Urban Zone...</div>
+<div id="splashScreen">
+    <div id="splashOverlay"></div>
+    <div class="splash-content">
+        <h1>DFRP WILDFIRE SIM</h1>
+        <p>Real-time WebGL Physics Simulation v1.5 [Urban Crossroad Update]</p>
+        <button id="startAppBtn">Start Simulation</button>
+    </div>
+</div>
+
+<div id="loading">
+    <div>Generating Environment...</div>
+    <div style="font-size: 14px; margin-top: 10px;">100,000 Fuel Nodes + Urban Center</div>
+</div>
+
+<div id="mainHelpModal" class="modal-overlay">
+    <div class="modal-content">
+        <span class="close-modal" id="closeMainHelp">&times;</span>
+        <h2>User Guide & Simulation Details</h2>
+        
+        <h4>🎮 How to Use</h4>
+        <div class="key-instruction"><span class="key-icon">Left Click + Drag</span> Rotate Camera</div>
+        <div class="key-instruction"><span class="key-icon">Right Click + Drag</span> Pan Camera</div>
+        <div class="key-instruction"><span class="key-icon">Scroll Wheel</span> Zoom In / Out</div>
+        <div class="key-instruction"><span class="key-icon">Tool: 🔥</span> Start a fire on fuel nodes.</div>
+        <div class="key-instruction"><span class="key-icon">Tool: 🪓</span> Clear vegetation for a firebreak.</div>
+
+        <h4>🏙️ Urban Dynamics</h4>
+        <p>The urban center at the crossroads acts as a <strong>Permanent Firebreak</strong>. Concrete and structures do not contain fuel and will stop surface spread.</p>
+    </div>
+</div>
+
+<div id="moistureModal" class="modal-overlay">
+    <div class="modal-content">
+        <span class="close-modal" id="closeMoistModal">&times;</span>
+        <h2>Fuel Moisture Physics</h2>
+        <p>Fire cannot consume fuel until the water inside it has evaporated (The Boiling Point Delay).</p>
+        <ul>
+            <li><strong>5% – 10%:</strong> Extreme danger.</li>
+            <li><strong>Above 30%:</strong> Extinction Point.</li>
+        </ul>
+    </div>
+</div>
 
 <div id="ui">
-    <div class="header-row"><h3>DFRP Simulator v1.6</h3></div>
-    <div class="control"><label>Wind Heading <span id="windDirVal" class="val">0°</span></label><input type="range" id="windDir" min="0" max="360" value="0"></div>
-    <div class="control"><label>Wind Speed <span id="windSpeedVal" class="val">25</span></label><input type="range" id="windSpeed" min="0" max="80" value="25"></div>
-    <div class="control"><label>Fuel Moisture <span id="moistureVal" class="val">15%</span></label><input type="range" id="moisture" min="5" max="30" value="15"></div>
-    <button id="resetBtn">Regenerate World</button>
+    <div class="header-row">
+        <h3>DFRP Simulator v1.5</h3>
+        <button id="mainHelpBtn" title="Help & Info">?</button>
+    </div>
+    
+    <div class="control">
+        <label>Simulation Speed <span id="simSpeedVal" class="val">1.0x</span></label>
+        <input type="range" id="simSpeed" min="0.1" max="5.0" step="0.1" value="1.0">
+    </div>
+
+    <div class="control">
+        <label>Wind Heading <span id="windDirVal" class="val">0°</span></label>
+        <input type="range" id="windDir" min="0" max="360" value="0">
+    </div>
+    
+    <div class="control">
+        <label>Wind Speed <span id="windSpeedVal" class="val">25</span></label>
+        <input type="range" id="windSpeed" min="0" max="80" value="25">
+    </div>
+
+    <div class="control">
+        <label>
+            Fuel Moisture 
+            <span id="moistureVal" class="val">15%</span>
+            <button class="info-trigger" id="infoBtn">i</button>
+        </label>
+        <input type="range" id="moisture" min="5" max="30" value="15">
+    </div>
+
+    <button id="resetBtn">Regenerate Terrain</button>
+
+    <div class="legend">
+        <strong>Map Features:</strong>
+        <div class="l-item"><div class="box" style="background:#777"></div>Roads / Crossroads</div>
+        <div class="l-item"><div class="box" style="background:#999"></div>Urban Zone (Buildings)</div>
+        <div class="l-item"><div class="box" style="background:#4da6ff"></div>River (Firebreak)</div>
+        <div class="l-item"><div class="box" style="background:#004d00"></div>Timber Fuel</div>
+    </div>
 </div>
 
 <div id="toolbar">
-    <div class="tool" id="toolIgnite" title="Ignite">🔥</div>
-    <div class="tool" id="toolCut" title="Firebreak">🪓</div>
-    <div id="compass"><svg id="compassSvg" viewBox="0 0 100 100" style="width:100%; height:100%;"><circle cx="50" cy="50" r="46" fill="#222"/><text x="50" y="24" font-family="Arial" font-weight="bold" font-size="14" fill="#d32f2f" text-anchor="middle">N</text></svg></div>
+    <div class="tool" id="toolIgnite" title="Ignite Single Tree">🔥</div>
+    <div class="tool" id="toolCut" title="Precision Firebreak">🪓</div>
+    <div id="compass" title="Terrain Orientation">
+        <svg id="compassSvg" viewBox="0 0 100 100">
+            <circle cx="50" cy="50" r="46" fill="#222" stroke="#555" stroke-width="2"/>
+            <text x="50" y="24" font-family="Arial" font-weight="bold" font-size="14" fill="#d32f2f" text-anchor="middle">N</text>
+            <path d="M50 28 L46 36 L54 36 Z" fill="#d32f2f" />
+        </svg>
+    </div>
 </div>
 
 <script type="module">
     import * as THREE from 'three';
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-    const CONFIG = { count: 100000, worldSize: 1500, cellSize: 20, baseSpreadRate: 0.05, dryingRate: 0.07 };
-    const S_LIVE = 0, S_DRYING = 1, S_BURNING = 2, S_CHARRED = 3, S_CUT = 4;
-    const F_GRASS = 0, F_BRUSH = 1, F_TIMBER = 2;
-    const FUEL_PROPS = {
-        [F_GRASS]:  { spread: 2.5, burn: 0.4, col: 0x7cfc00, scaleY: 0.15, scaleXZ: 1.2 },
-        [F_BRUSH]:  { spread: 1.0, burn: 1.0, col: 0x556b2f, scaleY: 0.6,  scaleXZ: 1.5 },
-        [F_TIMBER]: { spread: 0.4, burn: 3.5, col: 0x004d00, scaleY: 2.2,  scaleXZ: 1.0 }
+    // --- Config & State ---
+    const CONFIG = {
+        count: 100000, worldSize: 1500, cellSize: 20,
+        baseSpreadRate: 0.05, dryingRate: 0.07,
     };
 
+    const S_LIVE = 0, S_DRYING = 1, S_BURNING = 2, S_CHARRED = 3, S_CUT = 4;
+    const F_GRASS = 0, F_BRUSH = 1, F_TIMBER = 2;
+
+    const FUEL_PROPS = {
+        [F_GRASS]:  { spread: 2.5, burn: 0.4,  scaleY: 0.15, scaleXZ: 1.2, col: 0x7cfc00 }, 
+        [F_BRUSH]:  { spread: 1.0, burn: 1.0,  scaleY: 0.6,  scaleXZ: 1.5, col: 0x556b2f }, 
+        [F_TIMBER]: { spread: 0.4, burn: 3.5,  scaleY: 2.2,  scaleXZ: 1.0, col: 0x004d00 }  
+    };
+
+    let currentTool = null;
+    let simSpeedMultiplier = 1.0;
+    let spatialMap = [];
+    const mapDim = Math.ceil(CONFIG.worldSize / CONFIG.cellSize) + 2;
+    const mapOffset = CONFIG.worldSize / 2;
+    const STRIDE = 8;
+    let data = new Float32Array(CONFIG.count * STRIDE);
+
+    // --- Helpers ---
+    function getElevation(x, z) { return Math.sin(x*0.005)*30 + Math.cos(z*0.004)*30 + Math.sin(x*0.01 + z*0.01)*15; }
+    function isRiver(x, z) { return Math.abs(x - (Math.sin(z * 0.003) * 80 - 300)) < 25; }
+    function isRoadNS(x, z) { return Math.abs(x - (Math.sin(z * 0.002) * 40 + 300)) < 6; }
+    function isRoadEW(z) { return Math.abs(z - 150) < 8; }
+    function isUrban(x, z) { return Math.abs(x - 300) < 80 && Math.abs(z - 150) < 80; }
+    
+    function getFuelType(x, z) {
+        const n = Math.sin(x*0.003) + Math.cos(z*0.003); 
+        if (n > 0.8) return F_TIMBER; 
+        if (n < -0.5) return F_GRASS; 
+        return F_BRUSH; 
+    }
+
+    // --- Scene Setup ---
     const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(35, window.innerWidth/window.innerHeight, 1, 10000);
-    camera.position.set(-800, 600, 1000);
+    const camera = new THREE.PerspectiveCamera(35, window.innerWidth/window.innerHeight, 0.1, 10000);
+    camera.position.set(-600, 450, 1100);
+    
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.shadowMap.enabled = true;
     document.body.appendChild(renderer.domElement);
-    const controls = new OrbitControls(camera, renderer.domElement);
-    controls.maxPolarAngle = Math.PI / 2.1;
 
-    scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 0.8));
-    const sun = new THREE.DirectionalLight(0xffaa33, 1.2);
-    sun.position.set(500, 500, 200);
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.maxPolarAngle = Math.PI / 2 - 0.1;
+
+    const sun = new THREE.DirectionalLight(0xffaa33, 1.4);
+    sun.position.set(400, 700, 300);
     sun.castShadow = true;
     sun.shadow.mapSize.set(2048, 2048);
     scene.add(sun);
+    scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 0.7));
 
-    // Geographic Logic
-    const isRiver = (x, z) => Math.abs(x - (Math.sin(z * 0.003) * 80 - 300)) < 25;
-    const isRoadNS = (x, z) => Math.abs(x - (Math.sin(z * 0.002) * 40 + 300)) < 8;
-    const isRoadEW = (z) => Math.abs(z - 150) < 10;
-    const isUrban = (x, z) => Math.abs(x - 300) < 120 && Math.abs(z - 150) < 120;
-    const getElevation = (x, z) => isUrban(x, z) ? 2 : Math.sin(x*0.005)*30 + Math.cos(z*0.004)*30;
-
-    // Ground
-    const groundGeo = new THREE.PlaneGeometry(1800, 1800, 150, 150);
+    // --- Ground & Urban Mesh ---
+    const groundGeo = new THREE.PlaneGeometry(1800, 1800, 200, 200);
+    const gCount = groundGeo.attributes.position.count;
+    groundGeo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(gCount * 3), 3));
     const gPos = groundGeo.attributes.position;
-    const gCol = new Float32Array(gPos.count * 3);
-    const color = new THREE.Color();
-    for(let i=0; i<gPos.count; i++){
-        const x = gPos.getX(i), z = -gPos.getY(i);
-        let h = getElevation(x, z);
-        if(isUrban(x, z)) color.setHex(0x888888);
-        else if(isRiver(x, z)) { h -= 12; color.setHex(0x4da6ff); }
-        else if(isRoadNS(x, z) || isRoadEW(z)) { h = 3; color.setHex(0x333333); }
-        else color.setHex(0x556b2f);
+    const gCol = groundGeo.attributes.color;
+    const _c = new THREE.Color();
+
+    for(let i=0; i<gCount; i++){
+        const x = gPos.getX(i), y = gPos.getY(i);
+        let h = getElevation(x, -y);
+        const fType = getFuelType(x, -y);
+        
+        if(fType === F_GRASS) _c.setHex(0x9acd32); 
+        else if(fType === F_TIMBER) _c.setHex(0x2f4f4f); 
+        else _c.setHex(0x5c6b45); 
+
+        if (isUrban(x, -y)) {
+            h = getElevation(300, 150) + 0.5; // Foundation
+            _c.setHex(0x999999);
+        }
+        if (isRoadEW(-y)) { h += 1.2; _c.setHex(0x444444); } 
+        else if(isRiver(x, -y)) { h -= 12; _c.setHex(0x4da6ff); }
+        else if(isRoadNS(x, -y)) { h += 0.8; _c.setHex(0x555555); }
+
         gPos.setZ(i, h);
-        gCol[i*3] = color.r; gCol[i*3+1] = color.g; gCol[i*3+2] = color.b;
+        gCol.setXYZ(i, _c.r, _c.g, _c.b);
     }
-    groundGeo.setAttribute('color', new THREE.BufferAttribute(gCol, 3));
     groundGeo.computeVertexNormals();
-    const ground = new THREE.Mesh(groundGeo, new THREE.MeshStandardMaterial({ vertexColors: true }));
+    const ground = new THREE.Mesh(groundGeo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9 }));
     ground.rotation.x = -Math.PI/2;
     ground.receiveShadow = true;
     scene.add(ground);
 
-    // Fuel Mesh
-    const fuelGeo = new THREE.DodecahedronGeometry(2, 0); fuelGeo.translate(0, 1, 0);
-    const fuelMesh = new THREE.InstancedMesh(fuelGeo, new THREE.MeshStandardMaterial({ flatShading: true }), CONFIG.count);
-    fuelMesh.castShadow = true; scene.add(fuelMesh);
+    // --- Buildings ---
+    const buildingGeo = new THREE.BoxGeometry(10, 10, 10);
+    buildingGeo.translate(0, 5, 0);
+    const buildingMesh = new THREE.InstancedMesh(buildingGeo, new THREE.MeshStandardMaterial({ color: 0xcccccc }), 150);
+    buildingMesh.castShadow = true;
+    buildingMesh.receiveShadow = true;
+    scene.add(buildingMesh);
 
-    // NEW: Building Mesh
-    const buildGeo = new THREE.BoxGeometry(1, 1, 1); buildGeo.translate(0, 0.5, 0);
-    const buildMesh = new THREE.InstancedMesh(buildGeo, new THREE.MeshStandardMaterial({ color: 0xaaaaaa }), 400);
-    buildMesh.castShadow = true; buildMesh.receiveShadow = true;
-    scene.add(buildMesh);
+    // --- Fuel Mesh ---
+    const fuelGeo = new THREE.DodecahedronGeometry(2, 0); 
+    fuelGeo.translate(0, 1.5, 0);
+    const mesh = new THREE.InstancedMesh(fuelGeo, new THREE.MeshStandardMaterial({ color: 0xffffff, flatShading: true }), CONFIG.count);
+    mesh.castShadow = true;
+    scene.add(mesh);
 
-    const data = new Float32Array(CONFIG.count * 8);
-    const spatialMap = new Array(Math.pow(Math.ceil(CONFIG.worldSize/CONFIG.cellSize)+2, 2)).fill(0).map(()=>[]);
-    const mapOffset = CONFIG.worldSize / 2;
-    let windVec = { x: 0, z: -1 }, windSpeed = 25, baseMoisture = 15, currentTool = null;
+    const arrowHelper = new THREE.ArrowHelper(new THREE.Vector3(0,0,-1), new THREE.Vector3(0,350,0), 100, 0xd32f2f);
+    scene.add(arrowHelper);
+
+    const _mat = new THREE.Matrix4(), _vpos = new THREE.Vector3(), _vscale = new THREE.Vector3(), _vquat = new THREE.Quaternion(), _vcol = new THREE.Color();
+    let windVec = { x: 0, z: -1 }, windSpeed = 25, baseMoisture = 15;
 
     function init() {
         document.getElementById('loading').style.display = 'flex';
-        let bIdx = 0;
-        const matrix = new THREE.Matrix4();
-        const dummy = new THREE.Object3D();
-
-        for(let i=0; i<CONFIG.count; i++) {
-            const idx = i * 8;
-            const x = (Math.random()-0.5) * CONFIG.worldSize;
-            const z = (Math.random()-0.5) * CONFIG.worldSize;
-            
-            if (isRiver(x, z) || isRoadNS(x, z) || isRoadEW(z) || isUrban(x, z)) {
-                // If Urban and a "lot" roll matches, place a building
-                if(isUrban(x, z) && Math.random() < 0.015 && bIdx < 400) {
-                    dummy.position.set(x, 2, z);
-                    dummy.scale.set(15 + Math.random()*20, 10 + Math.random()*50, 15 + Math.random()*20);
-                    dummy.rotation.y = Math.floor(Math.random()*4) * (Math.PI/2);
-                    dummy.updateMatrix();
-                    buildMesh.setMatrixAt(bIdx++, dummy.matrix);
+        setTimeout(() => {
+            // 1. Generate Buildings
+            let bCount = 0;
+            for(let i=0; i<12; i++) {
+                for(let j=0; j<12; j++) {
+                    const bx = 240 + (i * 14);
+                    const bz = 90 + (j * 14);
+                    if(!isRoadNS(bx, bz) && !isRoadEW(bz) && isUrban(bx, bz) && bCount < 150) {
+                        const bh = getElevation(bx, bz);
+                        _vpos.set(bx, bh, bz);
+                        _vscale.set(0.6 + Math.random(), 0.5 + Math.random() * 2.5, 0.6 + Math.random());
+                        _vquat.setFromAxisAngle(new THREE.Vector3(0,1,0), (Math.random() > 0.5 ? 0 : Math.PI/2));
+                        _mat.compose(_vpos, _vquat, _vscale);
+                        buildingMesh.setMatrixAt(bCount++, _mat);
+                    }
                 }
-                data[idx+2] = S_CHARRED; data[idx+6] = -100;
-                matrix.makeScale(0,0,0); fuelMesh.setMatrixAt(i, matrix);
-                continue;
             }
+            buildingMesh.instanceMatrix.needsUpdate = true;
 
-            const y = getElevation(x, z), type = Math.random() > 0.8 ? F_TIMBER : (Math.random() > 0.4 ? F_BRUSH : F_GRASS);
-            const props = FUEL_PROPS[type];
-            data[idx] = x; data[idx+1] = z; data[idx+2] = S_LIVE; data[idx+3] = baseMoisture * 10;
-            data[idx+4] = (3000 * props.burn); data[idx+6] = y; data[idx+7] = type;
-            
-            dummy.position.set(x, y, z);
-            dummy.scale.set(props.scaleXZ, props.scaleY * (0.8+Math.random()*0.4), props.scaleXZ);
-            dummy.rotation.y = Math.random() * Math.PI;
-            dummy.updateMatrix();
-            fuelMesh.setMatrixAt(i, dummy.matrix);
-            fuelMesh.setColorAt(i, new THREE.Color(props.col));
-        }
-        buildMesh.count = bIdx;
-        fuelMesh.instanceMatrix.needsUpdate = true;
-        fuelMesh.instanceColor.needsUpdate = true;
-        buildMesh.instanceMatrix.needsUpdate = true;
-        document.getElementById('loading').style.display = 'none';
+            // 2. Generate Fuel
+            spatialMap = new Array(mapDim*mapDim).fill(0).map(()=>[]);
+            for(let i=0; i<CONFIG.count; i++) {
+                const idx = i * STRIDE;
+                const x = (Math.random()-0.5) * CONFIG.worldSize;
+                const z = (Math.random()-0.5) * CONFIG.worldSize;
+                
+                if (isRiver(x, z) || isRoadNS(x, z) || isRoadEW(z) || isUrban(x, z)) {
+                    data[idx+6] = -100; data[idx+2] = S_CHARRED;
+                    _mat.makeScale(0,0,0); mesh.setMatrixAt(i, _mat); continue;
+                }
+                const y = getElevation(x, z), type = getFuelType(x, z), props = FUEL_PROPS[type];
+                data[idx] = x; data[idx+1] = z; data[idx+2] = S_LIVE; data[idx+3] = baseMoisture * 10;
+                data[idx+4] = (3000 * props.burn) * (0.8 + Math.random()*0.4); data[idx+6] = y; data[idx+7] = type;
+                _vpos.set(x, y, z);
+                _vscale.set(props.scaleXZ * (0.8 + Math.random()*0.4), props.scaleY * (0.8 + Math.random()*0.4), props.scaleXZ * (0.8 + Math.random()*0.4));
+                _vquat.setFromAxisAngle(new THREE.Vector3(0,1,0), Math.random()*Math.PI*2);
+                _mat.compose(_vpos, _vquat, _vscale);
+                mesh.setMatrixAt(i, _mat);
+                mesh.setColorAt(i, new THREE.Color(props.col));
+            }
+            mesh.instanceMatrix.needsUpdate = true;
+            mesh.instanceColor.needsUpdate = true;
+            document.getElementById('loading').style.display = 'none';
+        }, 100);
     }
 
-    function updatePhysics() {
-        const mapDim = Math.ceil(CONFIG.worldSize / CONFIG.cellSize) + 2;
-        spatialMap.forEach(m => m.length = 0);
-        let activeFire = 0;
-        for(let i=0; i<CONFIG.count; i++) {
-            if(data[i*8+2] === S_BURNING) {
-                activeFire++;
-                const gx = Math.floor((data[i*8]+mapOffset)/CONFIG.cellSize), gz = Math.floor((data[i*8+1]+mapOffset)/CONFIG.cellSize);
-                if(gx>=0 && gx<mapDim && gz>=0 && gz<mapDim) spatialMap[gz*mapDim+gx].push(i);
-            }
-        }
-        if(activeFire === 0) return;
-
-        const dummy = new THREE.Object3D();
-        for(let i=0; i<CONFIG.count; i++) {
-            const idx = i*8, state = data[idx+2];
-            if(state >= S_CHARRED) continue;
-            if(state === S_BURNING) {
-                data[idx+4] -= 1;
-                if(data[idx+4] <= 0) {
-                    data[idx+2] = S_CHARRED;
-                    fuelMesh.setColorAt(i, new THREE.Color(0x111111));
-                    fuelMesh.getMatrixAt(i, dummy.matrix);
-                    dummy.matrix.decompose(dummy.position, dummy.quaternion, dummy.scale);
-                    dummy.scale.y = 0.05; dummy.updateMatrix();
-                    fuelMesh.setMatrixAt(i, dummy.matrix);
-                    fuelMesh.instanceColor.needsUpdate = fuelMesh.instanceMatrix.needsUpdate = true;
-                }
-                continue;
-            }
-            // Spread Logic
-            const gx = Math.floor((data[idx]+mapOffset)/CONFIG.cellSize), gz = Math.floor((data[idx+1]+mapOffset)/CONFIG.cellSize);
-            let heat = 0;
-            for(let nz=gz-1; nz<=gz+1; nz++) {
-                for(let nx=gx-1; nx<=gx+1; nx++) {
-                    if(nx<0 || nx>=mapDim || nz<0 || nz>=mapDim) continue;
-                    spatialMap[nz*mapDim+nx].forEach(fIdx => {
-                        const dx = data[idx]-data[fIdx*8], dz = data[idx+1]-data[fIdx*8+1];
-                        const dSq = dx*dx + dz*dz;
-                        if(dSq < 800) {
-                            const d = Math.sqrt(dSq), dot = (dx/d)*windVec.x + (dz/d)*windVec.z;
-                            heat += (1 - d/30) * (dot > 0 ? 1+dot*windSpeed*0.1 : 0.5) * FUEL_PROPS[data[idx+7]].spread * CONFIG.baseSpreadRate;
-                        }
-                    });
-                }
-            }
-            if(heat > 0) {
-                data[idx+3] -= heat * CONFIG.dryingRate;
-                if(data[idx+3] <= 0) {
-                    data[idx+2] = S_BURNING;
-                    fuelMesh.setColorAt(i, new THREE.Color(0xff4500));
-                    fuelMesh.instanceColor.needsUpdate = true;
-                }
-            }
-        }
-    }
-
-    // UI & Controls
     const raycaster = new THREE.Raycaster(), mouse = new THREE.Vector2();
-    window.addEventListener('mousedown', (e) => {
-        if(!currentTool) return;
-        mouse.x = (e.clientX/window.innerWidth)*2-1; mouse.y = -(e.clientY/window.innerHeight)*2+1;
+    let isDragging = false;
+
+    window.addEventListener('mousedown', e => { if(e.target.tagName === 'CANVAS' && currentTool) { isDragging = true; handleInput(e); }});
+    window.addEventListener('mousemove', e => { if(isDragging) handleInput(e); });
+    window.addEventListener('mouseup', () => isDragging = false);
+
+    function handleInput(e) {
+        mouse.x = (e.clientX/window.innerWidth)*2-1;
+        mouse.y = -(e.clientY/window.innerHeight)*2+1;
         raycaster.setFromCamera(mouse, camera);
         const hits = raycaster.intersectObject(ground);
         if(hits.length > 0) {
             const pt = hits[0].point;
-            for(let i=0; i<CONFIG.count; i++) {
-                if(Math.pow(data[i*8]-pt.x,2)+Math.pow(data[i*8+1]-pt.z,2) < 900) {
-                    if(currentTool === 'ignite') { data[i*8+2] = S_BURNING; data[i*8+3] = 0; }
-                    else { data[i*8+2] = S_CUT; const m = new THREE.Matrix4().makeScale(0,0,0); fuelMesh.setMatrixAt(i, m); }
+            if(currentTool === 'ignite') {
+                for(let i=0; i<CONFIG.count; i++) {
+                    const idx = i*STRIDE;
+                    if(data[idx+6] < -50) continue;
+                    if(Math.pow(data[idx]-pt.x, 2) + Math.pow(data[idx+1]-pt.z, 2) < 900) {
+                        data[idx+2] = S_BURNING; data[idx+3] = 0;
+                    }
+                }
+            } else if(currentTool === 'cut') {
+                for(let i=0; i<CONFIG.count; i++) {
+                    const idx = i*STRIDE;
+                    if(data[idx+6] < -50) continue;
+                    if(Math.pow(data[idx]-pt.x, 2) + Math.pow(data[idx+1]-pt.z, 2) < 60) {
+                        data[idx+2] = S_CUT; _mat.makeScale(0,0,0); mesh.setMatrixAt(i, _mat);
+                    }
+                }
+                mesh.instanceMatrix.needsUpdate = true;
+            }
+        }
+    }
+
+    function updatePhysics() {
+        for(let i=0; i<spatialMap.length; i++) spatialMap[i].length = 0;
+        let bCount = 0;
+        for(let i=0; i<CONFIG.count; i++) {
+            if(data[i*STRIDE + 2] === S_BURNING) {
+                bCount++;
+                const gx = Math.floor((data[i*STRIDE] + mapOffset) / CONFIG.cellSize);
+                const gz = Math.floor((data[i*STRIDE+1] + mapOffset) / CONFIG.cellSize);
+                if(gx>=0 && gx<mapDim && gz>=0 && gz<mapDim) spatialMap[gz*mapDim + gx].push(i);
+            }
+        }
+        if(bCount === 0) return;
+
+        let needColor = false, needMatrix = false;
+        for(let i=0; i<CONFIG.count; i++) {
+            const idx = i * STRIDE, state = data[idx+2];
+            if(state === S_CHARRED || state === S_CUT) continue;
+            if(state === S_BURNING) {
+                data[idx+4] -= 1.0 * simSpeedMultiplier;
+                if(data[idx+4] <= 0) {
+                    data[idx+2] = S_CHARRED;
+                    mesh.setColorAt(i, new THREE.Color(0x111111));
+                    _vpos.set(data[idx], data[idx+6], data[idx+1]);
+                    _vscale.set(FUEL_PROPS[data[idx+7]].scaleXZ, 0.05, FUEL_PROPS[data[idx+7]].scaleXZ);
+                    _mat.compose(_vpos, new THREE.Quaternion(0,0,0,1), _vscale);
+                    mesh.setMatrixAt(i, _mat);
+                    needColor = true; needMatrix = true;
+                } else if(Math.random() > 0.95) {
+                    _vcol.setHSL(0.05 + Math.random()*0.05, 1.0, (0.5 + Math.random()*0.5) * 0.6);
+                    mesh.setColorAt(i, _vcol); needColor = true;
+                }
+                continue;
+            }
+            const tx = data[idx], tz = data[idx+1], ty = data[idx+6];
+            const gx = Math.floor((tx + mapOffset) / CONFIG.cellSize), gz = Math.floor((tz + mapOffset) / CONFIG.cellSize);
+            
+            let heat = 0, hasFire = false;
+            for(let nz = gz-1; nz <= gz+1; nz++) {
+                for(let nx = gx-1; nx <= gx+1; nx++) {
+                    if(nx>=0 && nx<mapDim && nz>=0 && nz<mapDim && spatialMap[nz*mapDim+nx].length > 0) hasFire = true;
                 }
             }
-            fuelMesh.instanceMatrix.needsUpdate = fuelMesh.instanceColor.needsUpdate = true;
+            if(!hasFire) continue;
+
+            for(let nz = gz-1; nz <= gz+1; nz++) {
+                for(let nx = gx-1; nx <= gx+1; nx++) {
+                    if(nx<0 || nx>=mapDim || nz<0 || nz>=mapDim) continue;
+                    const cell = spatialMap[nz*mapDim+nx];
+                    for(let k=0; k<cell.length; k++) {
+                        const nIdx = cell[k] * STRIDE;
+                        const dx = tx-data[nIdx], dz = tz-data[nIdx+1], dy = ty-data[nIdx+6];
+                        const dSq = dx*dx + dz*dz;
+                        if(dSq < 900) {
+                            const d = Math.sqrt(dSq), dot = (dx/d)*windVec.x + (dz/d)*windVec.z;
+                            let wB = dot > 0 ? 1.0 + (dot*windSpeed*0.15) : Math.max(0.1, 1.0 + dot*0.8);
+                            let sB = (dy/(d+0.1)) > 0 ? 1.0 + (dy/(d+0.1))*6.0 : Math.max(0.2, 1.0 + (dy/(d+0.1)));
+                            heat += (1.0 - d/30) * wB * sB * FUEL_PROPS[data[nIdx+7]].spread * CONFIG.baseSpreadRate * simSpeedMultiplier;
+                        }
+                    }
+                }
+            }
+            if(heat > 0) {
+                data[idx+3] -= heat * CONFIG.dryingRate;
+                if(state === S_LIVE && data[idx+3] < baseMoisture * 5) {
+                    data[idx+2] = S_DRYING; mesh.setColorAt(i, new THREE.Color(0xb8860b)); needColor = true;
+                }
+                if(data[idx+3] <= 0) {
+                    data[idx+2] = S_BURNING; mesh.setColorAt(i, new THREE.Color(0xff4500)); needColor = true;
+                }
+            }
         }
-    });
+        if(needColor) mesh.instanceColor.needsUpdate = true;
+        if(needMatrix) mesh.instanceMatrix.needsUpdate = true;
+    }
 
-    document.getElementById('toolIgnite').onclick = () => { currentTool = 'ignite'; document.getElementById('toolIgnite').classList.add('active'); document.getElementById('toolCut').classList.remove('active'); };
-    document.getElementById('toolCut').onclick = () => { currentTool = 'cut'; document.getElementById('toolCut').classList.add('active'); document.getElementById('toolIgnite').classList.remove('active'); };
-    document.getElementById('startAppBtn').onclick = () => { document.getElementById('splashScreen').style.opacity = '0'; setTimeout(()=>document.getElementById('splashScreen').style.display='none', 800); };
-    document.getElementById('resetBtn').onclick = () => init();
-    
-    const updateInputs = () => {
+    function updateInputs() {
         const d = parseInt(document.getElementById('windDir').value);
+        const s = parseInt(document.getElementById('windSpeed').value);
+        const m = parseInt(document.getElementById('moisture').value);
+        simSpeedMultiplier = parseFloat(document.getElementById('simSpeed').value);
         document.getElementById('windDirVal').textContent = d + "°";
-        windVec.x = Math.sin(d * Math.PI/180); windVec.z = -Math.cos(d * Math.PI/180);
-        windSpeed = parseInt(document.getElementById('windSpeed').value);
-        document.getElementById('windSpeedVal').textContent = windSpeed;
-        baseMoisture = parseInt(document.getElementById('moisture').value);
-        document.getElementById('moistureVal').textContent = baseMoisture + "%";
-    };
-    ['windDir', 'windSpeed', 'moisture'].forEach(id => document.getElementById(id).oninput = updateInputs);
+        document.getElementById('windSpeedVal').textContent = s;
+        document.getElementById('moistureVal').textContent = m + "%";
+        document.getElementById('simSpeedVal').textContent = simSpeedMultiplier.toFixed(1) + "x";
+        const rad = d * (Math.PI/180);
+        windVec.x = Math.sin(rad); windVec.z = -Math.cos(rad);
+        windSpeed = s; baseMoisture = m;
+        arrowHelper.setDirection(new THREE.Vector3(windVec.x, 0, windVec.z));
+        arrowHelper.setLength(60 + s);
+    }
 
-    init(); updateInputs();
-    function animate() {
-        requestAnimationFrame(animate);
-        updatePhysics();
-        controls.update();
-        document.getElementById('compassSvg').style.transform = `rotate(${controls.getAzimuthalAngle()}rad)`;
-        renderer.render(scene, camera);
+    // --- UI Listeners ---
+    document.getElementById('startAppBtn').onclick = () => {
+        document.getElementById('splashScreen').style.opacity = '0';
+        setTimeout(() => document.getElementById('splashScreen').style.display = 'none', 800);
+    };
+
+    document.getElementById('infoBtn').onclick = () => document.getElementById('moistureModal').style.display = 'flex';
+    document.getElementById('closeMoistModal').onclick = () => document.getElementById('moistureModal').style.display = 'none';
+    document.getElementById('mainHelpBtn').onclick = () => document.getElementById('mainHelpModal').style.display = 'flex';
+    document.getElementById('closeMainHelp').onclick = () => document.getElementById('mainHelpModal').style.display = 'none';
+
+    document.getElementById('toolIgnite').onclick = function() {
+        currentTool = currentTool === 'ignite' ? null : 'ignite';
+        this.classList.toggle('active', currentTool === 'ignite');
+        document.getElementById('toolCut').classList.remove('active');
+    };
+    document.getElementById('toolCut').onclick = function() {
+        currentTool = currentTool === 'cut' ? null : 'cut';
+        this.classList.toggle('active', currentTool === 'cut');
+        document.getElementById('toolIgnite').classList.remove('active');
+    };
+
+    document.getElementById('windDir').oninput = updateInputs;
+    document.getElementById('windSpeed').oninput = updateInputs;
+    document.getElementById('moisture').oninput = updateInputs;
+    document.getElementById('simSpeed').oninput = updateInputs;
+    document.getElementById('resetBtn').onclick = () => init();
+
+    window.onresize = () => {
+        camera.aspect = window.innerWidth/window.innerHeight; camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    };
+
+    // --- Start ---
+    const compassSvg = document.getElementById('compassSvg');
+    init(); 
+    updateInputs();
+
+    function animate() { 
+        requestAnimationFrame(animate); 
+        updatePhysics(); 
+        controls.update(); 
+        compassSvg.style.transform = `rotate(${controls.getAzimuthalAngle()}rad)`;
+        renderer.render(scene, camera); 
     }
     animate();
 </script>
