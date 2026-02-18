@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>DFRP Wildfire Simulator v1.1</title>
+    <title>DFRP Wildfire Simulator v1.1 - Fixed Clipping</title>
     <style>
         body { margin: 0; overflow: hidden; background: #eef0f5; font-family: 'Segoe UI', sans-serif; }
         
@@ -73,7 +73,7 @@
 <div id="loading">Generating 100,000 Fuel Nodes...</div>
 
 <div id="ui">
-    <h3>DFRP Wildfire Simulator v1.0</h3>
+    <h3>DFRP Wildfire Simulator v1.1</h3>
     
     <div class="control">
         <label>Simulation Speed <span id="simSpeedVal" class="val">1.0x</span></label>
@@ -122,7 +122,6 @@
     const S_LIVE = 0, S_DRYING = 1, S_BURNING = 2, S_CHARRED = 3, S_CUT = 4;
     const F_GRASS = 0, F_BRUSH = 1, F_TIMBER = 2;
 
-    // Updated scales to differentiate shapes
     const FUEL_PROPS = {
         [F_GRASS]:  { spread: 2.5, burn: 0.4,  scaleY: 0.15, scaleXZ: 1.2, col: 0x7cfc00 }, 
         [F_BRUSH]:  { spread: 1.0, burn: 1.0,  scaleY: 0.6,  scaleXZ: 1.5, col: 0x556b2f }, 
@@ -144,7 +143,9 @@
     context.fillRect(0, 0, 2, 512);
     scene.background = new THREE.CanvasTexture(canvas);
 
-    const camera = new THREE.PerspectiveCamera(35, window.innerWidth/window.innerHeight, 5, 8000);
+    // FIXED: Near plane set to 0.1 to prevent disappearing when zooming in
+    // FIXED: Far plane increased to 10000 to prevent disappearing at angles
+    const camera = new THREE.PerspectiveCamera(35, window.innerWidth/window.innerHeight, 0.1, 10000);
     camera.position.set(-600, 450, 1100);
     
     const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -206,11 +207,13 @@
     const arrowHelper = new THREE.ArrowHelper(new THREE.Vector3(0,0,-1), new THREE.Vector3(0,350,0), 100, 0xd32f2f);
     scene.add(arrowHelper);
 
-    // --- UPDATED GEOMETRY ---
-    // Using a Dodecahedron allows us to deform the shape based on scale
     const fuelGeo = new THREE.DodecahedronGeometry(2, 0); 
     fuelGeo.translate(0, 1.5, 0);
     const mesh = new THREE.InstancedMesh(fuelGeo, new THREE.MeshStandardMaterial({ color: 0xffffff, flatShading: true }), CONFIG.count);
+    
+    // FIXED: Disable frustum culling to prevent items flickering out when camera looks at angles
+    mesh.frustumCulled = false; 
+    
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     scene.add(mesh);
@@ -241,8 +244,6 @@
                 data[idx+4] = (3000 * props.burn) * (0.8 + Math.random()*0.4); data[idx+6] = y; data[idx+7] = type;
                 _vpos.set(x, y, z);
                 
-                // Logic to further tweak shapes: 
-                // Timber gets a pointy look (thin XZ, tall Y), Shrubs get wide, Grass gets very flat.
                 const sY = props.scaleY * (0.8 + Math.random()*0.4);
                 const sXZ = props.scaleXZ * (0.8 + Math.random()*0.4);
                 
@@ -254,6 +255,10 @@
             }
             mesh.instanceMatrix.needsUpdate = true;
             mesh.instanceColor.needsUpdate = true;
+            
+            // Recompute bounding data for correct rendering
+            mesh.computeBoundingSphere();
+            
             document.getElementById('loading').style.display = 'none';
         }, 100);
     }
