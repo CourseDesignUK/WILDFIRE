@@ -2,38 +2,32 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>DFRP Wildfire Simulator v1.1</title>
+    <title>DFRP Wildfire Simulator v1.4</title>
     <style>
         body { margin: 0; overflow: hidden; background: #eef0f5; font-family: 'Segoe UI', sans-serif; }
         
         /* --- SPLASH SCREEN STYLES --- */
         #splashScreen {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: #111 url('Splash.jpg') no-repeat center center;
+            background: #111 url('splash.jpg') no-repeat center center;
             background-size: cover;
-            z-index: 2000; /* Highest priority */
+            z-index: 2000;
             display: flex; flex-direction: column; align-items: center; justify-content: center;
             transition: opacity 0.8s ease-out;
         }
-        
-        /* Dark overlay to ensure text readability on splash.jpg */
         #splashOverlay {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0, 0, 0, 0.6); z-index: -1;
         }
-
         .splash-content {
             text-align: center; color: white; z-index: 1;
             animation: fadeIn 1.5s ease-out;
         }
-
         .splash-content h1 {
             font-size: 3.5rem; margin-bottom: 10px; text-shadow: 0 4px 10px rgba(0,0,0,0.5);
             letter-spacing: 2px;
         }
-        
         .splash-content p { font-size: 1.2rem; color: #ddd; margin-bottom: 40px; }
-
         #startAppBtn {
             padding: 15px 50px; font-size: 18px; font-weight: bold; text-transform: uppercase;
             background: #d32f2f; color: white; border: none; border-radius: 50px;
@@ -43,7 +37,6 @@
         #startAppBtn:hover {
             background: #b71c1c; transform: scale(1.05); box-shadow: 0 0 30px rgba(211, 47, 47, 0.9);
         }
-
         @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
 
         /* --- UI STYLES --- */
@@ -55,22 +48,17 @@
             box-shadow: 0 4px 15px rgba(0,0,0,0.1);
             max-height: 90vh; overflow-y: auto; z-index: 10;
         }
-
         .header-row { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #ddd; padding-bottom: 8px; margin-bottom: 10px; }
         h3 { margin: 0; color: #222; font-weight: 600; font-size: 16px; }
-        
-        /* Main Help Button */
         #mainHelpBtn {
             background: #333; color: white; border: none; border-radius: 4px;
             width: 24px; height: 24px; cursor: pointer; font-weight: bold;
             display: flex; align-items: center; justify-content: center;
         }
         #mainHelpBtn:hover { background: #d32f2f; }
-
         .control { margin-bottom: 15px; }
         label { display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: #666; margin-bottom: 5px; text-transform: uppercase; font-weight: bold; }
         input[type=range] { width: 100%; cursor: pointer; accent-color: #d32f2f; }
-        
         button#resetBtn { 
             background: #f0f0f0; color: #333; border: 1px solid #ccc; 
             padding: 8px; width: 100%; cursor: pointer; border-radius: 4px; 
@@ -78,10 +66,7 @@
             margin-top: 5px;
         }
         button#resetBtn:hover { background: #e0e0e0; }
-
         .val { color: #d32f2f; font-weight: 700; margin-left: auto; margin-right: 8px; }
-        
-        /* Mini Info Button Style (for moisture) */
         .info-trigger {
             background: #999; color: white; border-radius: 50%; width: 14px; height: 14px;
             display: inline-flex; align-items: center; justify-content: center;
@@ -89,7 +74,7 @@
         }
         .info-trigger:hover { background: #d32f2f; }
 
-        /* Modal Overlay (Shared Class) */
+        /* Modal Overlay */
         .modal-overlay {
             display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0,0,0,0.7); z-index: 2100; justify-content: center; align-items: center;
@@ -101,12 +86,9 @@
         }
         .close-modal { position: absolute; top: 15px; right: 15px; font-size: 24px; cursor: pointer; color: #999; }
         .close-modal:hover { color: #d32f2f; }
-        
         .modal-content h2 { margin-top: 0; color: #d32f2f; border-bottom: 1px solid #eee; padding-bottom: 15px; }
         .modal-content h4 { color: #222; margin: 20px 0 8px 0; font-size: 16px; }
         .modal-content ul { padding-left: 20px; margin-top: 5px; }
-        .modal-content li { margin-bottom: 5px; }
-        
         .key-instruction { display: flex; align-items: center; margin-bottom: 8px; }
         .key-icon { background: #eee; padding: 2px 8px; border-radius: 4px; font-weight: bold; border: 1px solid #ccc; margin-right: 10px; font-size: 12px; }
 
@@ -114,11 +96,12 @@
         .l-item { display: flex; align-items: center; margin-bottom: 4px; }
         .box { width: 10px; height: 10px; margin-right: 8px; border-radius: 2px; }
 
+        /* Toolbar & Compass */
         #toolbar {
             position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
             display: flex; gap: 15px; background: white; padding: 12px 20px;
             border-radius: 50px; box-shadow: 0 5px 20px rgba(0,0,0,0.2);
-            z-index: 100;
+            z-index: 100; align-items: center;
         }
         .tool {
             width: 60px; height: 60px; border-radius: 50%; border: 2px solid #eee;
@@ -127,6 +110,19 @@
         }
         .tool:hover { transform: scale(1.1); background: #f9f9f9; }
         .tool.active { border-color: #d32f2f; background: #fff0f0; transform: scale(1.15); box-shadow: 0 0 15px rgba(211, 47, 47, 0.4); }
+
+        /* New Compass Styles */
+        #compass {
+            width: 60px; height: 60px; border-radius: 50%;
+            background: #222; border: 2px solid #444;
+            display: flex; align-items: center; justify-content: center;
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
+        }
+        #compassSvg {
+            width: 100%; height: 100%;
+            /* Important for performance during frequent rotation updates */
+            will-change: transform; 
+        }
 
         #loading {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
@@ -149,7 +145,7 @@
     <div id="splashOverlay"></div>
     <div class="splash-content">
         <h1>DFRP WILDFIRE SIM</h1>
-        <p>Real-time WebGL Physics Simulation v1.3</p>
+        <p>Real-time WebGL Physics Simulation v1.4</p>
         <button id="startAppBtn">Start Simulation</button>
     </div>
 </div>
@@ -167,19 +163,14 @@
         <div class="key-instruction"><span class="key-icon">Scroll Wheel</span> Zoom In / Out</div>
         <div class="key-instruction"><span class="key-icon">Tool: 🔥</span> Click the fire icon, then click anywhere on the terrain to start a fire.</div>
         <div class="key-instruction"><span class="key-icon">Tool: 🪓</span> Click the axe icon, then click on trees/grass to clear a firebreak.</div>
+        <div class="key-instruction"><span class="key-icon">Compass</span> Shows the direction of North relative to your camera view.</div>
 
         <h4>🌲 Simulation Models</h4>
         <p>This simulator approximates complex forestry equations for real-time browser performance.</p>
         <ul>
-            <li><strong>Surface Propagation:</strong> Based on a simplified version of the <em>Rothermel Surface Fire Spread Model</em>. It calculates spread vectors based on wind direction, slope steepness, and fuel proximity.</li>
-            <li><strong>Fuel Models (Anderson):</strong>
-                <ul>
-                    <li><strong>Grass (Model 1):</strong> High spread rate, low heat output.</li>
-                    <li><strong>Brush (Model 5):</strong> Medium spread, medium intensity.</li>
-                    <li><strong>Timber (Model 8):</strong> Slow spread, extreme heat/residence time.</li>
-                </ul>
-            </li>
-            <li><strong>Thermodynamics:</strong> Fire must boil off moisture content before combustion occurs. Wet fuel acts as a heat sink, while dry fuel releases energy instantly.</li>
+            <li><strong>Surface Propagation:</strong> Based on a simplified version of the <em>Rothermel Surface Fire Spread Model</em>.</li>
+            <li><strong>Fuel Models (Anderson):</strong> Grass, Brush, and Timber behavior.</li>
+            <li><strong>Thermodynamics:</strong> Fire must boil off moisture content before combustion occurs.</li>
         </ul>
     </div>
 </div>
@@ -191,31 +182,23 @@
         
         <h4>1. The "Boiling Point" Delay</h4>
         <p>In reality, fire cannot consume fuel until the water inside it has evaporated.</p>
-        <ul>
-            <li><strong>Higher Moisture:</strong> The fire must "cook" the tree longer before it actually catches fire. This creates a buffer where you see the trees turn yellow/brown but not yet red.</li>
-            <li><strong>Lower Moisture:</strong> This stage is skipped almost instantly. The fire moves with "flashy" behavior, typical of a drought-stricken forest.</li>
-        </ul>
 
         <h4>2. The Ignition Threshold</h4>
-        <p>This simulator uses logic based on drying states:</p>
-        <ul>
-            <li><strong>Live to Drying:</strong> Occurs when moisture drops below 5x the base moisture setting.</li>
-            <li><strong>Drying to Burning:</strong> Occurs when moisture hits 0.</li>
-        </ul>
+        <p>This simulator uses logic based on drying states (Live -> Drying -> Burning).</p>
 
         <h4>3. Critical Scientific Values</h4>
         <ul>
-            <li><strong>5% – 10%:</strong> <em>Extreme danger.</em> Matches ignite fuel instantly. Fire spreads as fast as the wind.</li>
-            <li><strong>10% – 15%:</strong> <em>High danger.</em> Standard summer conditions. Spreads reliably but can be stopped by roads.</li>
-            <li><strong>15% – 25%:</strong> <em>Moderate.</em> Patchy fire. Struggles to move tree-to-tree without high wind.</li>
-            <li><strong>Above 30%:</strong> <em>The Extinction Point.</em> Fire cannot generate enough heat to sustain a flame.</li>
+            <li><strong>5% – 10%:</strong> Extreme danger.</li>
+            <li><strong>10% – 15%:</strong> High danger (Summer).</li>
+            <li><strong>15% – 25%:</strong> Moderate.</li>
+            <li><strong>Above 30%:</strong> Extinction Point.</li>
         </ul>
     </div>
 </div>
 
 <div id="ui">
     <div class="header-row">
-        <h3>DFRP Simulator v1.3</h3>
+        <h3>DFRP Simulator v1.4</h3>
         <button id="mainHelpBtn" title="Help & Info">?</button>
     </div>
     
@@ -256,6 +239,20 @@
 <div id="toolbar">
     <div class="tool" id="toolIgnite" title="Ignite Single Tree">🔥</div>
     <div class="tool" id="toolCut" title="Precision Firebreak">🪓</div>
+    <div id="compass" title="Terrain Orientation">
+        <svg id="compassSvg" viewBox="0 0 100 100">
+            <circle cx="50" cy="50" r="46" fill="#222" stroke="#555" stroke-width="2"/>
+            <line x1="50" y1="5" x2="50" y2="10" stroke="#888" stroke-width="2" />
+            <line x1="50" y1="90" x2="50" y2="95" stroke="#888" stroke-width="2" />
+            <line x1="90" y1="50" x2="95" y2="50" stroke="#888" stroke-width="2" />
+            <line x1="5" y1="50" x2="10" y2="50" stroke="#888" stroke-width="2" />
+            <text x="50" y="24" font-family="Arial" font-weight="bold" font-size="14" fill="#d32f2f" text-anchor="middle">N</text>
+            <text x="50" y="85" font-family="Arial" font-weight="bold" font-size="10" fill="#666" text-anchor="middle">S</text>
+            <text x="85" y="54" font-family="Arial" font-weight="bold" font-size="10" fill="#666" text-anchor="middle">E</text>
+            <text x="15" y="54" font-family="Arial" font-weight="bold" font-size="10" fill="#666" text-anchor="middle">W</text>
+            <path d="M50 28 L46 36 L54 36 Z" fill="#d32f2f" />
+        </svg>
+    </div>
 </div>
 
 <script type="module">
@@ -546,17 +543,14 @@
     }
 
     // --- Modal Controls ---
-    // Moisture Modal
     const moistModal = document.getElementById('moistureModal');
     document.getElementById('infoBtn').onclick = () => moistModal.style.display = 'flex';
     document.getElementById('closeMoistModal').onclick = () => moistModal.style.display = 'none';
 
-    // Main Help Modal
     const mainHelpModal = document.getElementById('mainHelpModal');
     document.getElementById('mainHelpBtn').onclick = () => mainHelpModal.style.display = 'flex';
     document.getElementById('closeMainHelp').onclick = () => mainHelpModal.style.display = 'none';
 
-    // Close on backdrop click
     window.onclick = (e) => { 
         if(e.target == moistModal) moistModal.style.display = 'none'; 
         if(e.target == mainHelpModal) mainHelpModal.style.display = 'none'; 
@@ -597,9 +591,22 @@
         camera.aspect = window.innerWidth/window.innerHeight; camera.updateProjectionMatrix();
         renderer.setSize(window.innerWidth, window.innerHeight);
     });
+    
+    // Compass Logic
+    const compassSvg = document.getElementById('compassSvg');
 
     init(); updateInputs();
-    function animate() { requestAnimationFrame(animate); updatePhysics(); controls.update(); renderer.render(scene, camera); }
+    function animate() { 
+        requestAnimationFrame(animate); 
+        updatePhysics(); 
+        controls.update(); 
+        
+        // Update Compass Rotation based on Camera Azimuth
+        const azimuth = controls.getAzimuthalAngle();
+        compassSvg.style.transform = `rotate(${azimuth}rad)`;
+        
+        renderer.render(scene, camera); 
+    }
     animate();
 </script>
 </body>
