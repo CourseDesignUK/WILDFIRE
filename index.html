@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>DFRP Wildfire Simulator v1.5</title>
+    <title>DFRP Wildfire Simulator v1.6</title>
     <style>
         body { margin: 0; overflow: hidden; background: #eef0f5; font-family: 'Segoe UI', sans-serif; }
         
@@ -144,7 +144,7 @@
     <div id="splashOverlay"></div>
     <div class="splash-content">
         <h1>DFRP WILDFIRE SIM</h1>
-        <p>Real-time WebGL Physics Simulation v1.5</p>
+        <p>Real-time WebGL Physics Simulation v1.6</p>
         <button id="startAppBtn">Start Simulation</button>
     </div>
 </div>
@@ -162,13 +162,16 @@
         <div class="key-instruction"><span class="key-icon">Scroll Wheel</span> Zoom In / Out</div>
         <div class="key-instruction"><span class="key-icon">Tool: 🔥</span> Click the fire icon, then click anywhere on the terrain to start a fire.</div>
         <div class="key-instruction"><span class="key-icon">Tool: 🪓</span> Click the axe icon, then click on trees/grass to clear a firebreak.</div>
-        <div class="key-instruction"><span class="key-icon">Compass</span> Shows the direction of North relative to your camera view.</div>
 
         <h4>🌲 Simulation Models</h4>
-        <p>This simulator approximates complex forestry equations for real-time browser performance.</p>
         <ul>
             <li><strong>Surface Propagation:</strong> Based on a simplified version of the <em>Rothermel Surface Fire Spread Model</em>.</li>
-            <li><strong>Fuel Models (Anderson):</strong> Grass, Brush, and Timber behavior.</li>
+            <li><strong>Fuel Models:</strong>
+                <ul>
+                    <li>Grass/Brush/Timber: Standard vegetative models.</li>
+                    <li>Urban: High heat, very slow spread, persistent burning.</li>
+                </ul>
+            </li>
             <li><strong>Thermodynamics:</strong> Fire must boil off moisture content before combustion occurs.</li>
         </ul>
     </div>
@@ -197,7 +200,7 @@
 
 <div id="ui">
     <div class="header-row">
-        <h3>DFRP Simulator v1.5</h3>
+        <h3>DFRP Simulator v1.6</h3>
         <button id="mainHelpBtn" title="Help & Info">?</button>
     </div>
     
@@ -232,6 +235,7 @@
         <div class="l-item"><div class="box" style="background:#7cfc00"></div>Grass (Flat Tufts)</div>
         <div class="l-item"><div class="box" style="background:#556b2f"></div>Brush (Rounded Shrubs)</div>
         <div class="l-item"><div class="box" style="background:#004d00"></div>Timber (Pointed Trees)</div>
+        <div class="l-item"><div class="box" style="background:#778899"></div>Urban (Buildings)</div>
     </div>
 </div>
 
@@ -275,12 +279,14 @@
     };
 
     const S_LIVE = 0, S_DRYING = 1, S_BURNING = 2, S_CHARRED = 3, S_CUT = 4;
-    const F_GRASS = 0, F_BRUSH = 1, F_TIMBER = 2;
+    const F_GRASS = 0, F_BRUSH = 1, F_TIMBER = 2, F_URBAN = 3;
 
     const FUEL_PROPS = {
-        [F_GRASS]:  { spread: 2.5, burn: 0.4,  scaleY: 0.15, scaleXZ: 1.2, col: 0x7cfc00 }, 
-        [F_BRUSH]:  { spread: 1.0, burn: 1.0,  scaleY: 0.6,  scaleXZ: 1.5, col: 0x556b2f }, 
-        [F_TIMBER]: { spread: 0.4, burn: 3.5,  scaleY: 2.2,  scaleXZ: 1.0, col: 0x004d00 }  
+        [F_GRASS]:  { spread: 2.5,  burn: 0.4,  scaleY: 0.15, scaleXZ: 1.2, col: 0x7cfc00 }, 
+        [F_BRUSH]:  { spread: 1.0,  burn: 1.0,  scaleY: 0.6,  scaleXZ: 1.5, col: 0x556b2f }, 
+        [F_TIMBER]: { spread: 0.4,  burn: 3.5,  scaleY: 2.2,  scaleXZ: 1.0, col: 0x004d00 },
+        // Urban: Very slow spread (0.15), very high burn time (6.0), Blocky shape
+        [F_URBAN]:  { spread: 0.15, burn: 6.0,  scaleY: 1.5,  scaleXZ: 2.5, col: 0x778899 }  
     };
 
     let currentTool = null;
@@ -320,11 +326,19 @@
     sun.shadow.mapSize.set(2048, 2048);
     scene.add(sun);
 
+    // --- Terrain Logic ---
     function getElevation(x, z) { return Math.sin(x*0.005)*30 + Math.cos(z*0.004)*30 + Math.sin(x*0.01 + z*0.01)*15; }
     function isRiver(x, z) { return Math.abs(x - (Math.sin(z * 0.003) * 80 - 300)) < 25; }
     function isRoadNS(x, z) { return Math.abs(x - (Math.sin(z * 0.002) * 40 + 300)) < 6; }
     function isRoadEW(z) { return Math.abs(z - 150) < 8; }
     
+    // Urban Area: Centered at intersection (~311, 150)
+    function isTown(x, z) {
+        const dx = x - 311; 
+        const dz = z - 150;
+        return (dx*dx + dz*dz) < 16000; // Radius approx 125
+    }
+
     function getFuelType(x, z) {
         const n = Math.sin(x*0.003) + Math.cos(z*0.003); 
         if (n > 0.8) return F_TIMBER; 
@@ -347,20 +361,23 @@
         else if(fType === F_TIMBER) _c.setHex(0x2f4f4f); 
         else _c.setHex(0x5c6b45); 
 
-        // Road logic
-        if (isRoadEW(-y)) {
-            // East-West Road (Includes Bridge over river)
-            // We do NOT subtract river depth here, creating a bridge effect.
-            h += 1.0; 
-            _c.setHex(0x555555); // Dark Grey for EW Road
-        } 
-        else if(isRiver(x, -y)) { 
+        // Priority: River > Roads > Town > Nature
+        if(isRiver(x, -y)) { 
             h -= 12; 
             _c.setHex(0x4da6ff); 
         }
+        else if (isRoadEW(-y)) {
+            h += 1.0; 
+            _c.setHex(0x555555); // Dark Grey for EW Road
+        } 
         else if(isRoadNS(x, -y)) { 
             h += 0.5; 
-            _c.setHex(0x777777); 
+            _c.setHex(0x777777); // Lighter Grey for NS Road
+        }
+        else if(isTown(x, -y)) {
+            // Flatten terrain slightly for town
+            h = h * 0.5 + 2; 
+            _c.setHex(0x888888); // Paved ground color
         }
 
         gPos.setZ(i, h);
@@ -406,7 +423,17 @@
                     data[idx+6] = -100; data[idx+2] = S_CHARRED;
                     _mat.makeScale(0,0,0); mesh.setMatrixAt(i, _mat); continue;
                 }
-                const y = getElevation(x, z), type = getFuelType(x, z), props = FUEL_PROPS[type];
+
+                let y = getElevation(x, z);
+                let type = getFuelType(x, z);
+
+                // Check Town
+                if(isTown(x, z)) {
+                    y = y * 0.5 + 2; // Match ground flattening
+                    type = F_URBAN;
+                }
+
+                const props = FUEL_PROPS[type];
                 data[idx] = x; data[idx+1] = z; data[idx+2] = S_LIVE; data[idx+3] = baseMoisture * 10;
                 data[idx+4] = (3000 * props.burn) * (0.8 + Math.random()*0.4); data[idx+6] = y; data[idx+7] = type;
                 _vpos.set(x, y, z);
@@ -415,7 +442,14 @@
                 const sXZ = props.scaleXZ * (0.8 + Math.random()*0.4);
                 
                 _vscale.set(sXZ, sY, sXZ);
-                _vquat.setFromAxisAngle(new THREE.Vector3(0,1,0), Math.random()*Math.PI*2);
+                
+                // Urban buildings are aligned to grid (0 or 90 deg), Nature is random
+                if(type === F_URBAN) {
+                    _vquat.setFromAxisAngle(new THREE.Vector3(0,1,0), Math.random() > 0.5 ? 0 : Math.PI/2);
+                } else {
+                    _vquat.setFromAxisAngle(new THREE.Vector3(0,1,0), Math.random()*Math.PI*2);
+                }
+
                 _mat.compose(_vpos, _vquat, _vscale);
                 mesh.setMatrixAt(i, _mat);
                 mesh.setColorAt(i, new THREE.Color(props.col));
@@ -488,9 +522,18 @@
                 data[idx+4] -= 1.0 * simSpeedMultiplier;
                 if(data[idx+4] <= 0) {
                     data[idx+2] = S_CHARRED;
-                    mesh.setColorAt(i, new THREE.Color(0x111111));
+                    // Charred color darker for buildings
+                    const charredCol = (data[idx+7] === F_URBAN) ? 0x222222 : 0x111111;
+                    mesh.setColorAt(i, new THREE.Color(charredCol));
+                    
                     _vpos.set(data[idx], data[idx+6], data[idx+1]);
-                    _vscale.set(FUEL_PROPS[data[idx+7]].scaleXZ, 0.05, FUEL_PROPS[data[idx+7]].scaleXZ);
+                    // If urban, collapse slightly but don't disappear completely (ruins)
+                    if(data[idx+7] === F_URBAN) {
+                        _vscale.set(FUEL_PROPS[F_URBAN].scaleXZ, 0.4, FUEL_PROPS[F_URBAN].scaleXZ);
+                    } else {
+                        _vscale.set(FUEL_PROPS[data[idx+7]].scaleXZ, 0.05, FUEL_PROPS[data[idx+7]].scaleXZ);
+                    }
+                    
                     _mat.compose(_vpos, new THREE.Quaternion(0,0,0,1), _vscale);
                     mesh.setMatrixAt(i, _mat);
                     needColor = true; needMatrix = true;
@@ -503,124 +546,4 @@
             const tx = data[idx], tz = data[idx+1], ty = data[idx+6];
             const gx = Math.floor((tx + mapOffset) / CONFIG.cellSize), gz = Math.floor((tz + mapOffset) / CONFIG.cellSize);
             
-            let heat = 0, hasFire = false;
-            for(let nz = gz-1; nz <= gz+1; nz++) {
-                for(let nx = gx-1; nx <= gx+1; nx++) {
-                    if(nx>=0 && nx<mapDim && nz>=0 && nz<mapDim && spatialMap[nz*mapDim+nx].length > 0) hasFire = true;
-                }
-            }
-            if(!hasFire) continue;
-
-            for(let nz = gz-1; nz <= gz+1; nz++) {
-                for(let nx = gx-1; nx <= gx+1; nx++) {
-                    if(nx<0 || nx>=mapDim || nz<0 || nz>=mapDim) continue;
-                    const cell = spatialMap[nz*mapDim+nx];
-                    for(let k=0; k<cell.length; k++) {
-                        const nIdx = cell[k] * STRIDE;
-                        const dx = tx-data[nIdx], dz = tz-data[nIdx+1], dy = ty-data[nIdx+6];
-                        const dSq = dx*dx + dz*dz;
-                        if(dSq < 900) {
-                            const d = Math.sqrt(dSq), dot = (dx/d)*windVec.x + (dz/d)*windVec.z;
-                            let wB = dot > 0 ? 1.0 + (dot*windSpeed*0.15) : Math.max(0.1, 1.0 + dot*0.8);
-                            let sB = (dy/(d+0.1)) > 0 ? 1.0 + (dy/(d+0.1))*6.0 : Math.max(0.2, 1.0 + (dy/(d+0.1)));
-                            heat += (1.0 - d/30) * wB * sB * FUEL_PROPS[data[nIdx+7]].spread * CONFIG.baseSpreadRate * simSpeedMultiplier;
-                        }
-                    }
-                }
-            }
-            if(heat > 0) {
-                data[idx+3] -= heat * CONFIG.dryingRate;
-                if(state === S_LIVE && data[idx+3] < baseMoisture * 5) {
-                    data[idx+2] = S_DRYING; mesh.setColorAt(i, new THREE.Color(0xb8860b)); needColor = true;
-                }
-                if(data[idx+3] <= 0) {
-                    data[idx+2] = S_BURNING; mesh.setColorAt(i, new THREE.Color(0xff4500)); needColor = true;
-                }
-            }
-        }
-        if(needColor) mesh.instanceColor.needsUpdate = true;
-        if(needMatrix) mesh.instanceMatrix.needsUpdate = true;
-    }
-
-    function updateInputs() {
-        const d = parseInt(document.getElementById('windDir').value);
-        const s = parseInt(document.getElementById('windSpeed').value);
-        const m = parseInt(document.getElementById('moisture').value);
-        simSpeedMultiplier = parseFloat(document.getElementById('simSpeed').value);
-        document.getElementById('windDirVal').textContent = d + "°";
-        document.getElementById('windSpeedVal').textContent = s;
-        document.getElementById('moistureVal').textContent = m + "%";
-        document.getElementById('simSpeedVal').textContent = simSpeedMultiplier.toFixed(1) + "x";
-        const rad = d * (Math.PI/180);
-        windVec.x = Math.sin(rad); windVec.z = -Math.cos(rad);
-        windSpeed = s; baseMoisture = m;
-        arrowHelper.setDirection(new THREE.Vector3(windVec.x, 0, windVec.z));
-        arrowHelper.setLength(60 + s);
-    }
-
-    // --- Modal Controls ---
-    const moistModal = document.getElementById('moistureModal');
-    document.getElementById('infoBtn').onclick = () => moistModal.style.display = 'flex';
-    document.getElementById('closeMoistModal').onclick = () => moistModal.style.display = 'none';
-
-    const mainHelpModal = document.getElementById('mainHelpModal');
-    document.getElementById('mainHelpBtn').onclick = () => mainHelpModal.style.display = 'flex';
-    document.getElementById('closeMainHelp').onclick = () => mainHelpModal.style.display = 'none';
-
-    window.onclick = (e) => { 
-        if(e.target == moistModal) moistModal.style.display = 'none'; 
-        if(e.target == mainHelpModal) mainHelpModal.style.display = 'none'; 
-    };
-
-    const tIgnite = document.getElementById('toolIgnite');
-    const tCut = document.getElementById('toolCut');
-    
-    tIgnite.addEventListener('click', () => {
-        if (currentTool === 'ignite') {
-            currentTool = null;
-            tIgnite.classList.remove('active');
-        } else {
-            currentTool = 'ignite';
-            tIgnite.classList.add('active');
-            tCut.classList.remove('active');
-        }
-    });
-
-    tCut.addEventListener('click', () => {
-        if (currentTool === 'cut') {
-            currentTool = null;
-            tCut.classList.remove('active');
-        } else {
-            currentTool = 'cut';
-            tCut.classList.add('active');
-            tIgnite.classList.remove('active');
-        }
-    });
-
-    document.getElementById('windDir').addEventListener('input', updateInputs);
-    document.getElementById('windSpeed').addEventListener('input', updateInputs);
-    document.getElementById('moisture').addEventListener('input', updateInputs);
-    document.getElementById('simSpeed').addEventListener('input', updateInputs);
-    document.getElementById('resetBtn').addEventListener('click', init);
-
-    window.addEventListener('resize', () => {
-        camera.aspect = window.innerWidth/window.innerHeight; camera.updateProjectionMatrix();
-        renderer.setSize(window.innerWidth, window.innerHeight);
-    });
-    
-    // Compass Logic
-    const compassSvg = document.getElementById('compassSvg');
-
-    init(); updateInputs();
-    function animate() { 
-        requestAnimationFrame(animate); 
-        updatePhysics(); 
-        controls.update(); 
-        const azimuth = controls.getAzimuthalAngle();
-        compassSvg.style.transform = `rotate(${azimuth}rad)`;
-        renderer.render(scene, camera); 
-    }
-    animate();
-</script>
-</body>
-</html>
+            let heat = 0,
