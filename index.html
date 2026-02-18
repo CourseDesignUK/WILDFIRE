@@ -105,9 +105,9 @@
             </ul>
             <strong>MODELS USED:</strong>
             <ul>
-                <li><strong>Terrain:</strong> Sinusoidal noise elevation with generated rivers/roads.</li>
+                <li><strong>Terrain:</strong> Sinusoidal noise elevation with rivers, roads, and bridges.</li>
                 <li><strong>Anderson Logic:</strong> Discrete fuel types (Grass, Brush, Timber).</li>
-                <li><strong>Physics:</strong> Moisture evaporation and vector wind spread logic.</li>
+                <li><strong>Physics:</strong> Moisture-based evaporation and vector wind spread logic.</li>
             </ul>
         </div>
     </div>
@@ -154,11 +154,16 @@
     import * as THREE from 'three';
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-    // UI Logic
+    // UI & Splash Management
     const splash = document.getElementById('splash-screen');
     const infoPanel = document.getElementById('usage-info');
-    document.getElementById('start-btn').onclick = () => { splash.style.opacity = '0'; setTimeout(() => splash.style.display = 'none', 1000); };
-    document.getElementById('info-toggle-btn').onclick = () => { infoPanel.style.display = infoPanel.style.display === 'block' ? 'none' : 'block'; };
+    document.getElementById('start-btn').onclick = () => { 
+        splash.style.opacity = '0'; 
+        setTimeout(() => splash.style.display = 'none', 1000); 
+    };
+    document.getElementById('info-toggle-btn').onclick = () => { 
+        infoPanel.style.display = infoPanel.style.display === 'block' ? 'none' : 'block'; 
+    };
 
     const CONFIG = { count: 100000, worldSize: 1500, cellSize: 20, baseSpreadRate: 0.05, dryingRate: 0.07 };
     const S_LIVE = 0, S_DRYING = 1, S_BURNING = 2, S_CHARRED = 3, S_CUT = 4;
@@ -172,6 +177,8 @@
 
     let currentTool = null, simSpeedMultiplier = 1.0;
     const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xeef0f5);
+
     const camera = new THREE.PerspectiveCamera(35, window.innerWidth/window.innerHeight, 0.1, 10000);
     camera.position.set(-600, 450, 1100);
     
@@ -186,10 +193,21 @@
     const hemiLight = new THREE.HemisphereLight(0xffffff, 0xffffff, 0.7); scene.add(hemiLight);
     const sun = new THREE.DirectionalLight(0xffaa33, 1.4); sun.position.set(400, 700, 300); scene.add(sun);
 
-    // Terrain Functions from reference
-    function getElevation(x, z) { return Math.sin(x*0.005)*30 + Math.cos(z*0.004)*30 + Math.sin(x*0.01 + z*0.01)*15; }
+    // Terrain Logic with Bridge/E-W Road
     function isRiver(x, z) { return Math.abs(x - (Math.sin(z * 0.003) * 80 - 300)) < 25; }
-    function isRoad(x, z) { return Math.abs(x - (Math.sin(z * 0.002) * 40 + 300)) < 6; }
+    function isRoad(x, z) { 
+        const mainRoad = Math.abs(x - (Math.sin(z * 0.002) * 40 + 300)) < 6;
+        const crossRoad = Math.abs(z - 100) < 6;
+        return mainRoad || crossRoad;
+    }
+    function isBridge(x, z) { return Math.abs(z - 100) < 7 && isRiver(x, z); }
+
+    function getElevation(x, z) { 
+        if (isBridge(x, z)) return 8; // Bridge deck height
+        let h = Math.sin(x*0.005)*30 + Math.cos(z*0.004)*30 + Math.sin(x*0.01 + z*0.01)*15; 
+        return h;
+    }
+
     function getFuelType(x, z) {
         const n = Math.sin(x*0.003) + Math.cos(z*0.003); 
         if (n > 0.8) return F_TIMBER; 
@@ -209,12 +227,20 @@
         const x = gPos.getX(i), y = gPos.getY(i);
         let h = getElevation(x, -y);
         const fType = getFuelType(x, -y);
+        
+        // Base Colors
         if(fType === F_GRASS) _c.setHex(0x9acd32); 
         else if(fType === F_TIMBER) _c.setHex(0x2f4f4f); 
         else _c.setHex(0x5c6b45); 
 
-        if(isRiver(x, -y)) { h -= 12; _c.setHex(0x4da6ff); }
-        else if(isRoad(x, -y)) { h += 0.5; _c.setHex(0x777777); }
+        // Feature Overrides
+        if(isBridge(x, -y)) {
+            _c.setHex(0x555555); // Bridge Deck
+        } else if(isRoad(x, -y)) {
+            h += 0.5; _c.setHex(0x777777); 
+        } else if(isRiver(x, -y)) {
+            h -= 12; _c.setHex(0x4da6ff); 
+        }
 
         gPos.setZ(i, h);
         gCol.setXYZ(i, _c.r, _c.g, _c.b);
@@ -227,7 +253,7 @@
     // Fuel Nodes
     const fuelGeo = new THREE.DodecahedronGeometry(2, 0); 
     fuelGeo.translate(0, 1.5, 0);
-    const mesh = new THREE.InstancedMesh(fuelGeo, new THREE.MeshStandardMaterial({ color: 0xffffff }), CONFIG.count);
+    const mesh = new THREE.InstancedMesh(fuelGeo, new THREE.MeshStandardMaterial({ color: 0xffffff, flatShading: true }), CONFIG.count);
     scene.add(mesh);
 
     const STRIDE = 8;
@@ -246,13 +272,16 @@
                 const idx = i * STRIDE;
                 const x = (Math.random()-0.5) * CONFIG.worldSize;
                 const z = (Math.random()-0.5) * CONFIG.worldSize;
-                if (isRiver(x, z) || isRoad(x, z)) {
+                
+                if (isRoad(x, z) || isRiver(x, z)) {
                     data[idx+6] = -100; data[idx+2] = S_CUT;
                     _mat.makeScale(0,0,0); mesh.setMatrixAt(i, _mat); continue;
                 }
+                
                 const y = getElevation(x, z), type = getFuelType(x, z), props = FUEL_PROPS[type];
                 data[idx] = x; data[idx+1] = z; data[idx+2] = S_LIVE; data[idx+3] = baseMoisture * 10;
                 data[idx+4] = (3000 * props.burn) * (0.8 + Math.random()*0.4); data[idx+6] = y; data[idx+7] = type;
+                
                 _vpos.set(x, y, z);
                 _vscale.set(props.scaleXZ, props.scaleY, props.scaleXZ);
                 _mat.compose(_vpos, new THREE.Quaternion(), _vscale);
@@ -296,6 +325,7 @@
                 }
                 continue;
             }
+            
             const gx = Math.floor((data[idx] + mapOffset) / CONFIG.cellSize);
             const gz = Math.floor((data[idx+1] + mapOffset) / CONFIG.cellSize);
             let heat = 0;
@@ -328,6 +358,7 @@
         if(needMatrix) mesh.instanceMatrix.needsUpdate = true;
     }
 
+    // Interaction Tools
     const raycaster = new THREE.Raycaster(), mouse = new THREE.Vector2();
     window.addEventListener('mousedown', e => {
         if(e.target.tagName !== 'CANVAS' || !currentTool) return;
@@ -359,16 +390,26 @@
         baseMoisture = parseInt(document.getElementById('moisture').value);
     }
 
-    document.getElementById('toolIgnite').onclick = () => { currentTool = 'ignite'; document.getElementById('toolIgnite').classList.add('active'); document.getElementById('toolCut').classList.remove('active'); };
-    document.getElementById('toolCut').onclick = () => { currentTool = 'cut'; document.getElementById('toolCut').classList.add('active'); document.getElementById('toolIgnite').classList.remove('active'); };
+    document.getElementById('toolIgnite').onclick = () => { 
+        currentTool = 'ignite'; 
+        document.getElementById('toolIgnite').classList.add('active'); 
+        document.getElementById('toolCut').classList.remove('active'); 
+    };
+    document.getElementById('toolCut').onclick = () => { 
+        currentTool = 'cut'; 
+        document.getElementById('toolCut').classList.add('active'); 
+        document.getElementById('toolIgnite').classList.remove('active'); 
+    };
     document.querySelectorAll('input').forEach(i => i.oninput = updateInputs);
     document.getElementById('resetBtn').onclick = init;
 
     init(); updateInputs();
+    
     function animate() { 
         requestAnimationFrame(animate); 
         updatePhysics(); 
         controls.update(); 
+        // Compass logic: Sync N needle to world North based on camera azimuthal angle
         document.getElementById('compass-rose').style.transform = `rotate(${THREE.MathUtils.radToDeg(controls.getAzimuthalAngle())}deg)`;
         renderer.render(scene, camera); 
     }
