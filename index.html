@@ -2,10 +2,51 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>DFRP Wildfire Simulator v1.2</title>
+    <title>DFRP Wildfire Simulator v1.3</title>
     <style>
         body { margin: 0; overflow: hidden; background: #eef0f5; font-family: 'Segoe UI', sans-serif; }
         
+        /* Splash Screen */
+        #splashScreen {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: #111; z-index: 2000;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            color: white; transition: opacity 0.5s;
+        }
+        #splashScreen img {
+            max-width: 80%; max-height: 60vh; border: 4px solid #fff;
+            box-shadow: 0 0 30px rgba(0,0,0,0.8); margin-bottom: 20px;
+            object-fit: cover;
+        }
+        #startBtn {
+            padding: 15px 40px; font-size: 20px; background: #d32f2f; color: white;
+            border: none; cursor: pointer; text-transform: uppercase; font-weight: bold;
+            border-radius: 4px; letter-spacing: 1px;
+        }
+        #startBtn:hover { background: #b71c1c; }
+
+        /* Compass */
+        #compass {
+            position: absolute; top: 20px; right: 20px; width: 80px; height: 80px;
+            pointer-events: none; z-index: 10;
+        }
+        #compass-dial {
+            width: 100%; height: 100%;
+            border: 4px solid #333; border-radius: 50%;
+            background: rgba(255,255,255,0.8);
+            position: relative; box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+            display: flex; justify-content: center; align-items: center;
+        }
+        #compass-arrow {
+            color: #d32f2f; font-weight: 900; font-size: 24px;
+            position: absolute; top: 2px;
+        }
+        .dir-label { font-size: 10px; color: #666; font-weight: bold; position: absolute; }
+        .d-n { top: 5px; color: #d32f2f; }
+        .d-e { right: 8px; top: 32px; }
+        .d-s { bottom: 5px; }
+        .d-w { left: 8px; top: 32px; }
+
         #ui {
             position: absolute; top: 10px; left: 10px;
             background: rgba(255, 255, 255, 0.95); color: #333;
@@ -16,6 +57,7 @@
         }
 
         h3 { margin: 0 0 10px 0; color: #222; font-weight: 600; font-size: 16px; border-bottom: 2px solid #ddd; padding-bottom: 8px; }
+        
         .control { margin-bottom: 15px; }
         label { display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: #666; margin-bottom: 5px; text-transform: uppercase; font-weight: bold; }
         input[type=range] { width: 100%; cursor: pointer; accent-color: #d32f2f; }
@@ -27,43 +69,31 @@
             margin-top: 5px;
         }
         button#resetBtn:hover { background: #e0e0e0; }
+
         .val { color: #d32f2f; font-weight: 700; margin-left: auto; margin-right: 8px; }
         
+        /* Info Button Style */
         .info-trigger {
             background: #444; color: white; border-radius: 50%; width: 14px; height: 14px;
             display: inline-flex; align-items: center; justify-content: center;
             font-size: 9px; cursor: pointer; transition: 0.2s; border: none;
         }
+        .info-trigger:hover { background: #d32f2f; }
 
-        /* Splash Screen */
-        #splashScreen {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: #1a1a1a; z-index: 2000; display: flex; justify-content: center; align-items: center;
-            color: white; text-align: center; transition: opacity 0.6s ease;
-        }
-        .splash-content { max-width: 500px; padding: 30px; background: rgba(0,0,0,0.4); border-radius: 15px; backdrop-filter: blur(10px); }
-        .splash-img { width: 100%; border-radius: 8px; margin-bottom: 20px; border: 1px solid #444; }
-        .splash-btns { display: flex; gap: 10px; justify-content: center; }
-        .btn-main { background: #d32f2f; color: white; border: none; padding: 12px 24px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 14px; }
-        .btn-sub { background: #444; color: white; border: none; padding: 12px 24px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 14px; }
-
-        /* Compass */
-        #compass-container {
-            position: absolute; top: 10px; right: 10px;
-            width: 120px; height: 120px; z-index: 100;
-            pointer-events: none;
-        }
-
+        /* Modal Overlay */
         #moistureModal {
             display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.7); z-index: 2100; justify-content: center; align-items: center;
+            background: rgba(0,0,0,0.7); z-index: 2500; justify-content: center; align-items: center;
             padding: 20px; box-sizing: border-box; backdrop-filter: blur(4px);
         }
         .modal-content {
             background: white; padding: 30px; border-radius: 12px; max-width: 600px;
-            max-height: 80vh; overflow-y: auto; position: relative; line-height: 1.5; font-size: 14px; color: #333;
+            max-height: 80vh; overflow-y: auto; position: relative; line-height: 1.5; font-size: 14px;
         }
         .close-modal { position: absolute; top: 15px; right: 15px; font-size: 24px; cursor: pointer; color: #999; }
+        .modal-content h2 { margin-top: 0; color: #d32f2f; border-bottom: 2px solid #f0f0f0; padding-bottom: 10px; }
+        .modal-content h4 { color: #222; margin: 15px 0 5px 0; }
+        .modal-content ul { padding-left: 20px; }
 
         .legend { margin-top: 10px; border-top: 1px solid #eee; padding-top: 10px; font-size: 11px; }
         .l-item { display: flex; align-items: center; margin-bottom: 4px; }
@@ -72,17 +102,20 @@
         #toolbar {
             position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
             display: flex; gap: 15px; background: white; padding: 12px 20px;
-            border-radius: 50px; box-shadow: 0 5px 20px rgba(0,0,0,0.2); z-index: 10;
+            border-radius: 50px; box-shadow: 0 5px 20px rgba(0,0,0,0.2);
+            z-index: 100;
         }
         .tool {
             width: 60px; height: 60px; border-radius: 50%; border: 2px solid #eee;
             background: white; cursor: pointer; font-size: 28px; display: flex;
             align-items: center; justify-content: center; transition: 0.2s;
         }
-        .tool.active { border-color: #d32f2f; background: #fff0f0; transform: scale(1.15); }
+        .tool:hover { transform: scale(1.1); background: #f9f9f9; }
+        .tool.active { border-color: #d32f2f; background: #fff0f0; transform: scale(1.15); box-shadow: 0 0 15px rgba(211, 47, 47, 0.4); }
+
         #loading {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: #eef0f5; display: flex; justify-content: center; align-items: center;
+            background: #eef0f5; display: none; justify-content: center; align-items: center;
             font-size: 24px; color: #555; z-index: 999;
         }
     </style>
@@ -98,55 +131,92 @@
 <body>
 
 <div id="splashScreen">
-    <div class="splash-content">
-        <img src="splash.jpg" alt="Simulator Background" class="splash-img">
-        <h1>DFRP Wildfire Simulator</h1>
-        <p>Advanced Real-time Vegetation Combustion & Wind Dynamics</p>
-        <div class="splash-btns">
-            <button class="btn-main" id="startBtn">START SIMULATION</button>
-            <button class="btn-sub" id="splashInfoBtn">PHYSICS INFO</button>
-        </div>
-    </div>
+    <img src="Splash.jpeg" alt="Simulation Splash" onerror="this.style.display='none'; this.parentElement.innerHTML+='<h1>DFRP SIMULATOR</h1>'">
+    <button id="startBtn">Start Simulation</button>
 </div>
 
-<div id="compass-container"></div>
 <div id="loading">Generating 100,000 Fuel Nodes...</div>
+
+<div id="compass">
+    <div id="compass-dial">
+        <div class="dir-label d-n">N</div>
+        <div class="dir-label d-e">E</div>
+        <div class="dir-label d-s">S</div>
+        <div class="dir-label d-w">W</div>
+    </div>
+</div>
 
 <div id="moistureModal">
     <div class="modal-content">
         <span class="close-modal" id="closeModal">&times;</span>
-        <h2 style="color:#d32f2f">Fuel Moisture Physics</h2>
-        <p><strong>The "Boiling Point" Delay:</strong> Fire cannot consume fuel until internal water evaporates. Higher moisture forces the fire to "cook" fuel longer, creating a buffer before ignition.</p>
-        <p><strong>Critical Values:</strong><br>
-        5-10%: Extreme danger. Instant ignition.<br>
-        30%+: Extinction point. Self-sustained fire is nearly impossible.</p>
+        <h2>Fuel Moisture Physics</h2>
+        
+        <h4>1. The "Boiling Point" Delay</h4>
+        <p>In reality, fire cannot consume fuel until the water inside it has evaporated.</p>
+        <ul>
+            <li><strong>Higher Moisture:</strong> The fire must "cook" the tree longer before it actually catches fire. This creates a buffer where you see the trees turn yellow/brown but not yet red.</li>
+            <li><strong>Lower Moisture:</strong> This stage is skipped almost instantly. The fire moves with "flashy" behavior, typical of a drought-stricken forest.</li>
+        </ul>
+
+        <h4>2. The Ignition Threshold</h4>
+        <p>This simulator uses logic based on drying states:</p>
+        <ul>
+            <li><strong>Live to Drying:</strong> Occurs when moisture drops below 5x the base moisture setting.</li>
+            <li><strong>Drying to Burning:</strong> Occurs when moisture hits 0.</li>
+            <li><strong>Insight:</strong> At 30%, the forest is roughly 3x harder to ignite than at 10% because heat must work longer to "drain" the water units.</li>
+        </ul>
+
+        <h4>3. Critical Scientific Values</h4>
+        <ul>
+            <li><strong>5% – 10%:</strong> <em>Extreme danger.</em> Matches ignite fuel instantly. Fire spreads as fast as the wind.</li>
+            <li><strong>10% – 15%:</strong> <em>High danger.</em> Standard summer conditions. Spreads reliably but can be stopped by roads.</li>
+            <li><strong>15% – 25%:</strong> <em>Moderate.</em> Patchy fire. Struggles to move tree-to-tree without high wind.</li>
+            <li><strong>Above 30%:</strong> <em>The Extinction Point.</em> Fire cannot generate enough heat to sustain a flame.</li>
+        </ul>
+
+        <h4>4. Wind Interaction</h4>
+        <ul>
+            <li><strong>Low Moisture + High Wind:</strong> Firestorm scenario. Rapid forward drying ahead of the flame front.</li>
+            <li><strong>High Moisture + High Wind:</strong> The "Protective" effect. Wind can blow heat away before it evaporates water in the next fuel source.</li>
+        </ul>
     </div>
 </div>
 
 <div id="ui">
-    <h3>DFRP Wildfire Simulator v1.2</h3>
+    <h3>DFRP Wildfire Simulator v1.3</h3>
+    
     <div class="control">
         <label>Simulation Speed <span id="simSpeedVal" class="val">1.0x</span></label>
         <input type="range" id="simSpeed" min="0.1" max="5.0" step="0.1" value="1.0">
     </div>
+
     <div class="control">
         <label>Wind Heading <span id="windDirVal" class="val">0°</span></label>
         <input type="range" id="windDir" min="0" max="360" value="0">
     </div>
+    
     <div class="control">
         <label>Wind Speed <span id="windSpeedVal" class="val">25</span></label>
         <input type="range" id="windSpeed" min="0" max="80" value="25">
     </div>
+
     <div class="control">
-        <label>Fuel Moisture <span id="moistureVal" class="val">15%</span><button class="info-trigger" id="infoBtn">i</button></label>
+        <label>
+            Fuel Moisture 
+            <span id="moistureVal" class="val">15%</span>
+            <button class="info-trigger" id="infoBtn">i</button>
+        </label>
         <input type="range" id="moisture" min="5" max="30" value="15">
     </div>
+
     <button id="resetBtn">Regenerate Terrain</button>
+
     <div class="legend">
-        <strong>Fuel Models:</strong>
-        <div class="l-item"><div class="box" style="background:#7cfc00"></div>Grass</div>
-        <div class="l-item"><div class="box" style="background:#556b2f"></div>Brush</div>
-        <div class="l-item"><div class="box" style="background:#004d00"></div>Timber</div>
+        <strong>Fuel Models (Anderson):</strong>
+        <div class="l-item"><div class="box" style="background:#7cfc00"></div>Grass (Flat Tufts)</div>
+        <div class="l-item"><div class="box" style="background:#556b2f"></div>Brush (Rounded Shrubs)</div>
+        <div class="l-item"><div class="box" style="background:#004d00"></div>Timber (Pointed Trees)</div>
+        <div class="l-item"><div class="box" style="background:#d2b48c"></div>Flat Road</div>
     </div>
 </div>
 
@@ -159,9 +229,25 @@
     import * as THREE from 'three';
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-    const CONFIG = { count: 100000, worldSize: 1500, cellSize: 20, baseSpreadRate: 0.05, dryingRate: 0.07 };
+    // --- Splash Screen Logic ---
+    const splash = document.getElementById('splashScreen');
+    const loadMsg = document.getElementById('loading');
+    document.getElementById('startBtn').addEventListener('click', () => {
+        splash.style.opacity = '0';
+        setTimeout(() => { 
+            splash.style.display = 'none'; 
+            init(); // Start generation after splash
+        }, 500);
+    });
+
+    const CONFIG = {
+        count: 100000, worldSize: 1500, cellSize: 20,
+        baseSpreadRate: 0.05, dryingRate: 0.07,
+    };
+
     const S_LIVE = 0, S_DRYING = 1, S_BURNING = 2, S_CHARRED = 3, S_CUT = 4;
     const F_GRASS = 0, F_BRUSH = 1, F_TIMBER = 2;
+
     const FUEL_PROPS = {
         [F_GRASS]:  { spread: 2.5, burn: 0.4,  scaleY: 0.15, scaleXZ: 1.2, col: 0x7cfc00 }, 
         [F_BRUSH]:  { spread: 1.0, burn: 1.0,  scaleY: 0.6,  scaleXZ: 1.5, col: 0x556b2f }, 
@@ -170,73 +256,111 @@
 
     let currentTool = null;
     let simSpeedMultiplier = 1.0;
+
     const scene = new THREE.Scene();
     
-    // Background
     const canvas = document.createElement('canvas');
     canvas.width = 2; canvas.height = 512;
-    const ctx = canvas.getContext('2d');
-    const grad = ctx.createLinearGradient(0, 0, 0, 512);
-    grad.addColorStop(0, '#8ab6ff'); grad.addColorStop(0.6, '#eef0f5');
-    ctx.fillStyle = grad; ctx.fillRect(0, 0, 2, 512);
+    const context = canvas.getContext('2d');
+    const gradient = context.createLinearGradient(0, 0, 0, 512);
+    gradient.addColorStop(0, '#8ab6ff');
+    gradient.addColorStop(0.6, '#eef0f5');
+    context.fillStyle = gradient;
+    context.fillRect(0, 0, 2, 512);
     scene.background = new THREE.CanvasTexture(canvas);
 
     const camera = new THREE.PerspectiveCamera(35, window.innerWidth/window.innerHeight, 0.1, 10000);
     camera.position.set(-600, 450, 1100);
+    
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     document.body.appendChild(renderer.domElement);
 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
+    controls.target.set(0, 50, 0);
+    controls.maxPolarAngle = Math.PI / 2 - 0.1;
 
-    // Lighting
-    scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1.0));
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0xffffff, 0.7);
+    scene.add(hemiLight);
     const sun = new THREE.DirectionalLight(0xffaa33, 1.4);
     sun.position.set(400, 700, 300);
     sun.castShadow = true;
     sun.shadow.mapSize.set(2048, 2048);
     scene.add(sun);
 
-    // Wind Arrow (100% Larger: length base 200 instead of 100)
-    const arrowHelper = new THREE.ArrowHelper(new THREE.Vector3(0,0,-1), new THREE.Vector3(0,400,0), 200, 0xd32f2f, 40, 20);
-    scene.add(arrowHelper);
-
-    // Compass Setup
-    const compassScene = new THREE.Scene();
-    const compassCamera = new THREE.PerspectiveCamera(45, 1, 0.1, 10);
-    compassCamera.position.z = 5;
-    const compassRenderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
-    compassRenderer.setSize(120, 120);
-    document.getElementById('compass-container').appendChild(compassRenderer.domElement);
-
-    const compassGroup = new THREE.Group();
-    const coneN = new THREE.Mesh(new THREE.ConeGeometry(0.5, 2, 12), new THREE.MeshBasicMaterial({color: 0xd32f2f}));
-    coneN.position.y = 1;
-    const coneS = new THREE.Mesh(new THREE.ConeGeometry(0.5, 2, 12), new THREE.MeshBasicMaterial({color: 0xffffff}));
-    coneS.position.y = -1; coneS.rotation.z = Math.PI;
-    compassGroup.add(coneN, coneS);
-    compassGroup.rotation.x = -Math.PI/2; // Orient to map
-    compassScene.add(compassGroup);
-
-    // Terrain & Logic
-    function getElevation(x, z) { return Math.sin(x*0.005)*30 + Math.cos(z*0.004)*30; }
+    // --- Terrain & Road Logic ---
+    function getElevation(x, z) { return Math.sin(x*0.005)*30 + Math.cos(z*0.004)*30 + Math.sin(x*0.01 + z*0.01)*15; }
     function isRiver(x, z) { return Math.abs(x - (Math.sin(z * 0.003) * 80 - 300)) < 25; }
     function isRoad(x, z) { return Math.abs(x - (Math.sin(z * 0.002) * 40 + 300)) < 6; }
+    
+    // NEW: East-West Road Logic
+    // Located around Z=100, 14 units wide, mostly straight
+    function isEWRoad(x, z) { return Math.abs(z - 100) < 14; }
+
     function getFuelType(x, z) {
         const n = Math.sin(x*0.003) + Math.cos(z*0.003); 
-        return n > 0.8 ? F_TIMBER : (n < -0.5 ? F_GRASS : F_BRUSH);
+        if (n > 0.8) return F_TIMBER; 
+        if (n < -0.5) return F_GRASS; 
+        return F_BRUSH; 
     }
 
-    const groundGeo = new THREE.PlaneGeometry(1800, 1800, 100, 100);
-    groundGeo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(groundGeo.attributes.position.count * 3), 3));
+    const groundGeo = new THREE.PlaneGeometry(1800, 1800, 200, 200);
+    const gCount = groundGeo.attributes.position.count;
+    groundGeo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(gCount * 3), 3));
+    const gPos = groundGeo.attributes.position;
+    const gCol = groundGeo.attributes.color;
+    const _c = new THREE.Color();
+
+    for(let i=0; i<gCount; i++){
+        const x = gPos.getX(i), y = gPos.getY(i);
+        let h = getElevation(x, -y);
+        const fType = getFuelType(x, -y);
+        
+        // Base terrain color
+        if(fType === F_GRASS) _c.setHex(0x9acd32); 
+        else if(fType === F_TIMBER) _c.setHex(0x2f4f4f); 
+        else _c.setHex(0x5c6b45); 
+
+        // River logic
+        if(isRiver(x, -y)) { 
+            h -= 12; 
+            _c.setHex(0x4da6ff); 
+        }
+        // NS Road logic
+        else if(isRoad(x, -y)) { 
+            h += 0.5; 
+            _c.setHex(0x777777); 
+        }
+
+        // NEW: EW Road Logic (Bridge behavior)
+        // We apply this last to overwrite river depth/color if they intersect
+        if(isEWRoad(x, -y)) {
+            // Force a flatter height, roughly average of terrain, effectively bridging the river
+            h = 10; 
+            _c.setHex(0xd2b48c); // Flat Beige
+        }
+
+        gPos.setZ(i, h);
+        gCol.setXYZ(i, _c.r, _c.g, _c.b);
+    }
+    groundGeo.computeVertexNormals();
     const ground = new THREE.Mesh(groundGeo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9 }));
     ground.rotation.x = -Math.PI/2;
     ground.receiveShadow = true;
     scene.add(ground);
 
-    const mesh = new THREE.InstancedMesh(new THREE.DodecahedronGeometry(2, 0), new THREE.MeshStandardMaterial({ flatShading: true }), CONFIG.count);
+    const arrowHelper = new THREE.ArrowHelper(new THREE.Vector3(0,0,-1), new THREE.Vector3(0,350,0), 100, 0xd32f2f);
+    scene.add(arrowHelper);
+
+    const fuelGeo = new THREE.DodecahedronGeometry(2, 0); 
+    fuelGeo.translate(0, 1.5, 0);
+    const mesh = new THREE.InstancedMesh(fuelGeo, new THREE.MeshStandardMaterial({ color: 0xffffff, flatShading: true }), CONFIG.count);
+    mesh.frustumCulled = false;
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
     scene.add(mesh);
 
     const STRIDE = 8;
@@ -244,48 +368,162 @@
     let spatialMap = [];
     const mapDim = Math.ceil(CONFIG.worldSize / CONFIG.cellSize) + 2;
     const mapOffset = CONFIG.worldSize / 2;
+
+    const _mat = new THREE.Matrix4(), _vpos = new THREE.Vector3(), _vscale = new THREE.Vector3(), _vquat = new THREE.Quaternion(), _vcol = new THREE.Color();
     let windVec = { x: 0, z: -1 }, windSpeed = 25, baseMoisture = 15;
 
     function init() {
-        document.getElementById('loading').style.display = 'flex';
-        spatialMap = new Array(mapDim*mapDim).fill(0).map(()=>[]);
-        const gPos = groundGeo.attributes.position;
-        const gCol = groundGeo.attributes.color;
-        const _c = new THREE.Color();
-        for(let i=0; i<gPos.count; i++) {
-            const x = gPos.getX(i), z = -gPos.getY(i);
-            let h = getElevation(x, z);
-            if(isRiver(x,z)) { h-=12; _c.setHex(0x4da6ff); }
-            else if(isRoad(x,z)) { h+=0.5; _c.setHex(0x777777); }
-            else { _c.setHex(getFuelType(x,z) === F_TIMBER ? 0x2f4f4f : 0x5c6b45); }
-            gPos.setZ(i, h); gCol.setXYZ(i, _c.r, _c.g, _c.b);
-        }
-        groundGeo.computeVertexNormals();
-        groundGeo.attributes.position.needsUpdate = true;
-        groundGeo.attributes.color.needsUpdate = true;
-
-        const _m = new THREE.Matrix4(), _v = new THREE.Vector3(), _q = new THREE.Quaternion(), _s = new THREE.Vector3();
-        for(let i=0; i<CONFIG.count; i++) {
-            const idx = i*STRIDE, x = (Math.random()-0.5)*CONFIG.worldSize, z = (Math.random()-0.5)*CONFIG.worldSize;
-            if(isRiver(x,z) || isRoad(x,z)) { data[idx+6]=-100; _m.makeScale(0,0,0); mesh.setMatrixAt(i, _m); continue; }
-            const y = getElevation(x,z), type = getFuelType(x,z), p = FUEL_PROPS[type];
-            data[idx]=x; data[idx+1]=z; data[idx+2]=S_LIVE; data[idx+3]=baseMoisture*10;
-            data[idx+4]=3000*p.burn; data[idx+6]=y; data[idx+7]=type;
-            _v.set(x, y, z); _s.set(p.scaleXZ, p.scaleY, p.scaleXZ);
-            _q.setFromAxisAngle(new THREE.Vector3(0,1,0), Math.random()*Math.PI);
-            _m.compose(_v, _q, _s); mesh.setMatrixAt(i, _m); mesh.setColorAt(i, new THREE.Color(p.col));
-        }
-        mesh.instanceMatrix.needsUpdate = true; mesh.instanceColor.needsUpdate = true;
-        document.getElementById('loading').style.display = 'none';
+        loadMsg.style.display = 'flex';
+        setTimeout(() => {
+            spatialMap = new Array(mapDim*mapDim).fill(0).map(()=>[]);
+            for(let i=0; i<CONFIG.count; i++) {
+                const idx = i * STRIDE;
+                const x = (Math.random()-0.5) * CONFIG.worldSize;
+                const z = (Math.random()-0.5) * CONFIG.worldSize;
+                
+                // Exclude trees from River, NS Road, and NEW EW Road
+                if (isRiver(x, z) || isRoad(x, z) || isEWRoad(x, z)) {
+                    data[idx+6] = -100; data[idx+2] = S_CHARRED;
+                    _mat.makeScale(0,0,0); mesh.setMatrixAt(i, _mat); continue;
+                }
+                
+                const y = getElevation(x, z), type = getFuelType(x, z), props = FUEL_PROPS[type];
+                data[idx] = x; data[idx+1] = z; data[idx+2] = S_LIVE; data[idx+3] = baseMoisture * 10;
+                data[idx+4] = (3000 * props.burn) * (0.8 + Math.random()*0.4); data[idx+6] = y; data[idx+7] = type;
+                _vpos.set(x, y, z);
+                
+                const sY = props.scaleY * (0.8 + Math.random()*0.4);
+                const sXZ = props.scaleXZ * (0.8 + Math.random()*0.4);
+                
+                _vscale.set(sXZ, sY, sXZ);
+                _vquat.setFromAxisAngle(new THREE.Vector3(0,1,0), Math.random()*Math.PI*2);
+                _mat.compose(_vpos, _vquat, _vscale);
+                mesh.setMatrixAt(i, _mat);
+                mesh.setColorAt(i, new THREE.Color(props.col));
+            }
+            mesh.instanceMatrix.needsUpdate = true;
+            mesh.instanceColor.needsUpdate = true;
+            mesh.computeBoundingSphere();
+            loadMsg.style.display = 'none';
+        }, 100);
     }
 
-    // Tools & UI
-    document.getElementById('startBtn').onclick = () => document.getElementById('splashScreen').style.opacity = '0';
-    document.getElementById('splashScreen').ontransitionend = (e) => e.target.style.display = 'none';
-    document.getElementById('infoBtn').onclick = document.getElementById('splashInfoBtn').onclick = () => document.getElementById('moistureModal').style.display='flex';
-    document.getElementById('closeModal').onclick = () => document.getElementById('moistureModal').style.display='none';
-    
-    const updateInputs = () => {
+    const raycaster = new THREE.Raycaster(), mouse = new THREE.Vector2();
+    let isDragging = false;
+
+    window.addEventListener('mousedown', e => {
+        if(e.target.tagName !== 'CANVAS' || !currentTool) return;
+        isDragging = true; handleInput(e);
+    });
+    window.addEventListener('mousemove', e => { if(isDragging) handleInput(e); });
+    window.addEventListener('mouseup', () => isDragging = false);
+
+    function handleInput(e) {
+        mouse.x = (e.clientX/window.innerWidth)*2-1;
+        mouse.y = -(e.clientY/window.innerHeight)*2+1;
+        raycaster.setFromCamera(mouse, camera);
+        const hits = raycaster.intersectObject(ground);
+        if(hits.length > 0) {
+            const pt = hits[0].point;
+            if(currentTool === 'ignite') {
+                let closestIdx = -1, minDistSq = Infinity;
+                for(let i=0; i<CONFIG.count; i++) {
+                    const idx = i*STRIDE;
+                    if(data[idx+6] < -50) continue;
+                    const dSq = Math.pow(data[idx]-pt.x, 2) + Math.pow(data[idx+1]-pt.z, 2);
+                    if(dSq < 900 && dSq < minDistSq) { minDistSq = dSq; closestIdx = idx; }
+                }
+                if(closestIdx !== -1) { data[closestIdx+2] = S_BURNING; data[closestIdx+3] = 0; }
+            } else if(currentTool === 'cut') {
+                let needsUpdate = false;
+                for(let i=0; i<CONFIG.count; i++) {
+                    const idx = i*STRIDE;
+                    if(data[idx+6] < -50) continue;
+                    if(Math.pow(data[idx]-pt.x, 2) + Math.pow(data[idx+1]-pt.z, 2) < 56) {
+                        data[idx+2] = S_CUT; _mat.makeScale(0,0,0); mesh.setMatrixAt(i, _mat); needsUpdate = true;
+                    }
+                }
+                if(needsUpdate) mesh.instanceMatrix.needsUpdate = true;
+            }
+        }
+    }
+
+    function updatePhysics() {
+        for(let i=0; i<spatialMap.length; i++) spatialMap[i].length = 0;
+        let bCount = 0;
+        for(let i=0; i<CONFIG.count; i++) {
+            if(data[i*STRIDE + 2] === S_BURNING) {
+                bCount++;
+                const gx = Math.floor((data[i*STRIDE] + mapOffset) / CONFIG.cellSize);
+                const gz = Math.floor((data[i*STRIDE+1] + mapOffset) / CONFIG.cellSize);
+                if(gx>=0 && gx<mapDim && gz>=0 && gz<mapDim) spatialMap[gz*mapDim + gx].push(i);
+            }
+        }
+        if(bCount === 0) return;
+
+        let needColor = false, needMatrix = false;
+        for(let i=0; i<CONFIG.count; i++) {
+            const idx = i * STRIDE, state = data[idx+2];
+            if(state === S_CHARRED || state === S_CUT) continue;
+            if(state === S_BURNING) {
+                data[idx+4] -= 1.0 * simSpeedMultiplier;
+                if(data[idx+4] <= 0) {
+                    data[idx+2] = S_CHARRED;
+                    mesh.setColorAt(i, new THREE.Color(0x111111));
+                    _vpos.set(data[idx], data[idx+6], data[idx+1]);
+                    _vscale.set(FUEL_PROPS[data[idx+7]].scaleXZ, 0.05, FUEL_PROPS[data[idx+7]].scaleXZ);
+                    _mat.compose(_vpos, new THREE.Quaternion(0,0,0,1), _vscale);
+                    mesh.setMatrixAt(i, _mat);
+                    needColor = true; needMatrix = true;
+                } else if(Math.random() > 0.95) {
+                    _vcol.setHSL(0.05 + Math.random()*0.05, 1.0, (0.5 + Math.random()*0.5) * 0.6);
+                    mesh.setColorAt(i, _vcol); needColor = true;
+                }
+                continue;
+            }
+            const tx = data[idx], tz = data[idx+1], ty = data[idx+6];
+            const gx = Math.floor((tx + mapOffset) / CONFIG.cellSize), gz = Math.floor((tz + mapOffset) / CONFIG.cellSize);
+            
+            let heat = 0, hasFire = false;
+            for(let nz = gz-1; nz <= gz+1; nz++) {
+                for(let nx = gx-1; nx <= gx+1; nx++) {
+                    if(nx>=0 && nx<mapDim && nz>=0 && nz<mapDim && spatialMap[nz*mapDim+nx].length > 0) hasFire = true;
+                }
+            }
+            if(!hasFire) continue;
+
+            for(let nz = gz-1; nz <= gz+1; nz++) {
+                for(let nx = gx-1; nx <= gx+1; nx++) {
+                    if(nx<0 || nx>=mapDim || nz<0 || nz>=mapDim) continue;
+                    const cell = spatialMap[nz*mapDim+nx];
+                    for(let k=0; k<cell.length; k++) {
+                        const nIdx = cell[k] * STRIDE;
+                        const dx = tx-data[nIdx], dz = tz-data[nIdx+1], dy = ty-data[nIdx+6];
+                        const dSq = dx*dx + dz*dz;
+                        if(dSq < 900) {
+                            const d = Math.sqrt(dSq), dot = (dx/d)*windVec.x + (dz/d)*windVec.z;
+                            let wB = dot > 0 ? 1.0 + (dot*windSpeed*0.15) : Math.max(0.1, 1.0 + dot*0.8);
+                            let sB = (dy/(d+0.1)) > 0 ? 1.0 + (dy/(d+0.1))*6.0 : Math.max(0.2, 1.0 + (dy/(d+0.1)));
+                            heat += (1.0 - d/30) * wB * sB * FUEL_PROPS[data[nIdx+7]].spread * CONFIG.baseSpreadRate * simSpeedMultiplier;
+                        }
+                    }
+                }
+            }
+            if(heat > 0) {
+                data[idx+3] -= heat * CONFIG.dryingRate;
+                if(state === S_LIVE && data[idx+3] < baseMoisture * 5) {
+                    data[idx+2] = S_DRYING; mesh.setColorAt(i, new THREE.Color(0xb8860b)); needColor = true;
+                }
+                if(data[idx+3] <= 0) {
+                    data[idx+2] = S_BURNING; mesh.setColorAt(i, new THREE.Color(0xff4500)); needColor = true;
+                }
+            }
+        }
+        if(needColor) mesh.instanceColor.needsUpdate = true;
+        if(needMatrix) mesh.instanceMatrix.needsUpdate = true;
+    }
+
+    function updateInputs() {
         const d = parseInt(document.getElementById('windDir').value);
         const s = parseInt(document.getElementById('windSpeed').value);
         const m = parseInt(document.getElementById('moisture').value);
@@ -295,103 +533,72 @@
         document.getElementById('moistureVal').textContent = m + "%";
         document.getElementById('simSpeedVal').textContent = simSpeedMultiplier.toFixed(1) + "x";
         const rad = d * (Math.PI/180);
-        windVec.x = Math.sin(rad); windVec.z = -Math.cos(rad); windSpeed = s; baseMoisture = m;
+        windVec.x = Math.sin(rad); windVec.z = -Math.cos(rad);
+        windSpeed = s; baseMoisture = m;
         arrowHelper.setDirection(new THREE.Vector3(windVec.x, 0, windVec.z));
-        arrowHelper.setLength(120 + s*2); // Doubled arrow scale
-    };
+        arrowHelper.setLength(60 + s);
+    }
 
-    ['windDir','windSpeed','moisture','simSpeed'].forEach(id => document.getElementById(id).oninput = updateInputs);
-    document.getElementById('resetBtn').onclick = init;
+    // Modal Controls
+    const modal = document.getElementById('moistureModal');
+    document.getElementById('infoBtn').onclick = () => modal.style.display = 'flex';
+    document.getElementById('closeModal').onclick = () => modal.style.display = 'none';
+    window.onclick = (e) => { if(e.target == modal) modal.style.display = 'none'; };
+
+    const tIgnite = document.getElementById('toolIgnite');
+    const tCut = document.getElementById('toolCut');
     
-    // Interaction
-    const raycaster = new THREE.Raycaster(), mouse = new THREE.Vector2();
-    window.onmousedown = (e) => {
-        if(e.target.tagName !== 'CANVAS' || !currentTool) return;
-        mouse.x = (e.clientX/window.innerWidth)*2-1; mouse.y = -(e.clientY/window.innerHeight)*2+1;
-        raycaster.setFromCamera(mouse, camera);
-        const hits = raycaster.intersectObject(ground);
-        if(hits.length > 0) {
-            const pt = hits[0].point;
-            for(let i=0; i<CONFIG.count; i++) {
-                const idx = i*STRIDE;
-                if(Math.pow(data[idx]-pt.x, 2) + Math.pow(data[idx+1]-pt.z, 2) < (currentTool==='ignite'?900:100)) {
-                    if(currentTool==='ignite') { data[idx+2]=S_BURNING; data[idx+3]=0; }
-                    else { data[idx+2]=S_CUT; mesh.setMatrixAt(i, new THREE.Matrix4().makeScale(0,0,0)); }
-                }
-            }
-            mesh.instanceMatrix.needsUpdate = true;
+    tIgnite.addEventListener('click', () => {
+        if (currentTool === 'ignite') {
+            currentTool = null;
+            tIgnite.classList.remove('active');
+        } else {
+            currentTool = 'ignite';
+            tIgnite.classList.add('active');
+            tCut.classList.remove('active');
         }
-    };
+    });
 
-    document.getElementById('toolIgnite').onclick = () => { currentTool='ignite'; document.getElementById('toolIgnite').classList.add('active'); document.getElementById('toolCut').classList.remove('active'); };
-    document.getElementById('toolCut').onclick = () => { currentTool='cut'; document.getElementById('toolCut').classList.add('active'); document.getElementById('toolIgnite').classList.remove('active'); };
-
-    function updatePhysics() {
-        for(let i=0; i<spatialMap.length; i++) spatialMap[i].length = 0;
-        let active = 0;
-        for(let i=0; i<CONFIG.count; i++) {
-            if(data[i*STRIDE+2] === S_BURNING) {
-                active++;
-                const gx = Math.floor((data[i*STRIDE]+mapOffset)/CONFIG.cellSize), gz = Math.floor((data[i*STRIDE+1]+mapOffset)/CONFIG.cellSize);
-                if(gx>=0 && gx<mapDim && gz>=0 && gz<mapDim) spatialMap[gz*mapDim+gx].push(i);
-            }
+    tCut.addEventListener('click', () => {
+        if (currentTool === 'cut') {
+            currentTool = null;
+            tCut.classList.remove('active');
+        } else {
+            currentTool = 'cut';
+            tCut.classList.add('active');
+            tIgnite.classList.remove('active');
         }
-        if(!active) return;
+    });
 
-        for(let i=0; i<CONFIG.count; i++) {
-            const idx = i*STRIDE, state = data[idx+2];
-            if(state >= S_CHARRED) continue;
-            if(state === S_BURNING) {
-                data[idx+4] -= simSpeedMultiplier;
-                if(data[idx+4]<=0) {
-                    data[idx+2]=S_CHARRED; mesh.setColorAt(i, new THREE.Color(0x111111));
-                    const _m = new THREE.Matrix4(); mesh.getMatrixAt(i, _m);
-                    _m.scale(new THREE.Vector3(1, 0.1, 1)); mesh.setMatrixAt(i, _m);
-                }
-                continue;
-            }
-            const tx=data[idx], tz=data[idx+1], gx=Math.floor((tx+mapOffset)/CONFIG.cellSize), gz=Math.floor((tz+mapOffset)/CONFIG.cellSize);
-            let heat = 0;
-            for(let nz=gz-1; nz<=gz+1; nz++) {
-                for(let nx=gx-1; nx<=gx+1; nx++) {
-                    if(nx<0 || nx>=mapDim || nz<0 || nz>=mapDim) continue;
-                    spatialMap[nz*mapDim+nx].forEach(fIdx => {
-                        const nIdx = fIdx*STRIDE, dx=tx-data[nIdx], dz=tz-data[nIdx+1], dSq=dx*dx+dz*dz;
-                        if(dSq < 900) {
-                            const d=Math.sqrt(dSq), dot = (dx/d)*windVec.x + (dz/d)*windVec.z;
-                            const wB = dot > 0 ? 1.0 + (dot*windSpeed*0.15) : 0.5;
-                            heat += (1.0 - d/30) * wB * FUEL_PROPS[data[nIdx+7]].spread * CONFIG.baseSpreadRate * simSpeedMultiplier;
-                        }
-                    });
-                }
-            }
-            if(heat > 0) {
-                data[idx+3] -= heat * CONFIG.dryingRate;
-                if(state === S_LIVE && data[idx+3] < baseMoisture*5) { data[idx+2]=S_DRYING; mesh.setColorAt(i, new THREE.Color(0xb8860b)); }
-                if(data[idx+3] <= 0) { data[idx+2]=S_BURNING; mesh.setColorAt(i, new THREE.Color(0xff4500)); }
-            }
-        }
-        mesh.instanceColor.needsUpdate = true; mesh.instanceMatrix.needsUpdate = true;
-    }
+    document.getElementById('windDir').addEventListener('input', updateInputs);
+    document.getElementById('windSpeed').addEventListener('input', updateInputs);
+    document.getElementById('moisture').addEventListener('input', updateInputs);
+    document.getElementById('simSpeed').addEventListener('input', updateInputs);
+    document.getElementById('resetBtn').addEventListener('click', init);
 
-    init(); updateInputs();
-    function animate() {
-        requestAnimationFrame(animate);
-        updatePhysics();
-        controls.update();
-        
-        // Sync Compass to Camera
-        const camEuler = new THREE.Euler().setFromQuaternion(camera.quaternion, 'YXZ');
-        compassGroup.rotation.z = camEuler.y; 
-
-        renderer.render(scene, camera);
-        compassRenderer.render(compassScene, compassCamera);
-    }
-    animate();
-    window.onresize = () => {
+    window.addEventListener('resize', () => {
         camera.aspect = window.innerWidth/window.innerHeight; camera.updateProjectionMatrix();
         renderer.setSize(window.innerWidth, window.innerHeight);
-    };
+    });
+
+    // We do NOT call init() immediately anymore, waiting for Splash screen start
+    updateInputs();
+
+    // Compass Rotation logic in animate loop
+    const compassDial = document.getElementById('compass-dial');
+    function animate() { 
+        requestAnimationFrame(animate); 
+        updatePhysics(); 
+        controls.update(); 
+        renderer.render(scene, camera); 
+
+        // Update compass based on camera angle
+        if(compassDial) {
+             const angle = controls.getAzimuthalAngle();
+             compassDial.style.transform = `rotate(${angle}rad)`;
+        }
+    }
+    animate();
 </script>
 </body>
 </html>
