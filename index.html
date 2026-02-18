@@ -6,47 +6,47 @@
     <style>
         body { margin: 0; overflow: hidden; background: #eef0f5; font-family: 'Segoe UI', sans-serif; }
         
-        /* Splash Screen */
+        /* --- SPLASH SCREEN STYLES --- */
         #splashScreen {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: #111; z-index: 2000;
+            background: #111 url('splash.jpg') no-repeat center center;
+            background-size: cover;
+            z-index: 2000; /* Highest priority */
             display: flex; flex-direction: column; align-items: center; justify-content: center;
-            color: white; transition: opacity 0.5s;
+            transition: opacity 0.8s ease-out;
         }
-        #splashScreen img {
-            max-width: 80%; max-height: 60vh; border: 4px solid #fff;
-            box-shadow: 0 0 30px rgba(0,0,0,0.8); margin-bottom: 20px;
-            object-fit: cover;
+        
+        /* Dark overlay to ensure text readability on splash.jpg */
+        #splashOverlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.6); z-index: -1;
         }
-        #startBtn {
-            padding: 15px 40px; font-size: 20px; background: #d32f2f; color: white;
-            border: none; cursor: pointer; text-transform: uppercase; font-weight: bold;
-            border-radius: 4px; letter-spacing: 1px;
-        }
-        #startBtn:hover { background: #b71c1c; }
 
-        /* Compass */
-        #compass {
-            position: absolute; top: 20px; right: 20px; width: 80px; height: 80px;
-            pointer-events: none; z-index: 10;
+        .splash-content {
+            text-align: center; color: white; z-index: 1;
+            animation: fadeIn 1.5s ease-out;
         }
-        #compass-dial {
-            width: 100%; height: 100%;
-            border: 4px solid #333; border-radius: 50%;
-            background: rgba(255,255,255,0.8);
-            position: relative; box-shadow: 0 4px 10px rgba(0,0,0,0.2);
-            display: flex; justify-content: center; align-items: center;
-        }
-        #compass-arrow {
-            color: #d32f2f; font-weight: 900; font-size: 24px;
-            position: absolute; top: 2px;
-        }
-        .dir-label { font-size: 10px; color: #666; font-weight: bold; position: absolute; }
-        .d-n { top: 5px; color: #d32f2f; }
-        .d-e { right: 8px; top: 32px; }
-        .d-s { bottom: 5px; }
-        .d-w { left: 8px; top: 32px; }
 
+        .splash-content h1 {
+            font-size: 3.5rem; margin-bottom: 10px; text-shadow: 0 4px 10px rgba(0,0,0,0.5);
+            letter-spacing: 2px;
+        }
+        
+        .splash-content p { font-size: 1.2rem; color: #ddd; margin-bottom: 40px; }
+
+        #startAppBtn {
+            padding: 15px 50px; font-size: 18px; font-weight: bold; text-transform: uppercase;
+            background: #d32f2f; color: white; border: none; border-radius: 50px;
+            cursor: pointer; box-shadow: 0 0 20px rgba(211, 47, 47, 0.6);
+            transition: transform 0.2s, background 0.2s, box-shadow 0.2s;
+        }
+        #startAppBtn:hover {
+            background: #b71c1c; transform: scale(1.05); box-shadow: 0 0 30px rgba(211, 47, 47, 0.9);
+        }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* --- UI STYLES --- */
         #ui {
             position: absolute; top: 10px; left: 10px;
             background: rgba(255, 255, 255, 0.95); color: #333;
@@ -56,8 +56,17 @@
             max-height: 90vh; overflow-y: auto; z-index: 10;
         }
 
-        h3 { margin: 0 0 10px 0; color: #222; font-weight: 600; font-size: 16px; border-bottom: 2px solid #ddd; padding-bottom: 8px; }
+        .header-row { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #ddd; padding-bottom: 8px; margin-bottom: 10px; }
+        h3 { margin: 0; color: #222; font-weight: 600; font-size: 16px; }
         
+        /* Main Help Button */
+        #mainHelpBtn {
+            background: #333; color: white; border: none; border-radius: 4px;
+            width: 24px; height: 24px; cursor: pointer; font-weight: bold;
+            display: flex; align-items: center; justify-content: center;
+        }
+        #mainHelpBtn:hover { background: #d32f2f; }
+
         .control { margin-bottom: 15px; }
         label { display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: #666; margin-bottom: 5px; text-transform: uppercase; font-weight: bold; }
         input[type=range] { width: 100%; cursor: pointer; accent-color: #d32f2f; }
@@ -72,28 +81,34 @@
 
         .val { color: #d32f2f; font-weight: 700; margin-left: auto; margin-right: 8px; }
         
-        /* Info Button Style */
+        /* Mini Info Button Style (for moisture) */
         .info-trigger {
-            background: #444; color: white; border-radius: 50%; width: 14px; height: 14px;
+            background: #999; color: white; border-radius: 50%; width: 14px; height: 14px;
             display: inline-flex; align-items: center; justify-content: center;
             font-size: 9px; cursor: pointer; transition: 0.2s; border: none;
         }
         .info-trigger:hover { background: #d32f2f; }
 
-        /* Modal Overlay */
-        #moistureModal {
+        /* Modal Overlay (Shared Class) */
+        .modal-overlay {
             display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.7); z-index: 2500; justify-content: center; align-items: center;
+            background: rgba(0,0,0,0.7); z-index: 2100; justify-content: center; align-items: center;
             padding: 20px; box-sizing: border-box; backdrop-filter: blur(4px);
         }
         .modal-content {
-            background: white; padding: 30px; border-radius: 12px; max-width: 600px;
-            max-height: 80vh; overflow-y: auto; position: relative; line-height: 1.5; font-size: 14px;
+            background: white; padding: 30px; border-radius: 12px; max-width: 650px; width: 100%;
+            max-height: 85vh; overflow-y: auto; position: relative; line-height: 1.6; font-size: 14px; color: #444;
         }
         .close-modal { position: absolute; top: 15px; right: 15px; font-size: 24px; cursor: pointer; color: #999; }
-        .modal-content h2 { margin-top: 0; color: #d32f2f; border-bottom: 2px solid #f0f0f0; padding-bottom: 10px; }
-        .modal-content h4 { color: #222; margin: 15px 0 5px 0; }
-        .modal-content ul { padding-left: 20px; }
+        .close-modal:hover { color: #d32f2f; }
+        
+        .modal-content h2 { margin-top: 0; color: #d32f2f; border-bottom: 1px solid #eee; padding-bottom: 15px; }
+        .modal-content h4 { color: #222; margin: 20px 0 8px 0; font-size: 16px; }
+        .modal-content ul { padding-left: 20px; margin-top: 5px; }
+        .modal-content li { margin-bottom: 5px; }
+        
+        .key-instruction { display: flex; align-items: center; margin-bottom: 8px; }
+        .key-icon { background: #eee; padding: 2px 8px; border-radius: 4px; font-weight: bold; border: 1px solid #ccc; margin-right: 10px; font-size: 12px; }
 
         .legend { margin-top: 10px; border-top: 1px solid #eee; padding-top: 10px; font-size: 11px; }
         .l-item { display: flex; align-items: center; margin-bottom: 4px; }
@@ -115,7 +130,7 @@
 
         #loading {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: #eef0f5; display: none; justify-content: center; align-items: center;
+            background: #eef0f5; display: flex; justify-content: center; align-items: center;
             font-size: 24px; color: #555; z-index: 999;
         }
     </style>
@@ -131,24 +146,47 @@
 <body>
 
 <div id="splashScreen">
-    <img src="Splash.jpeg" alt="Simulation Splash" onerror="this.style.display='none'; this.parentElement.innerHTML+='<h1>DFRP SIMULATOR</h1>'">
-    <button id="startBtn">Start Simulation</button>
+    <div id="splashOverlay"></div>
+    <div class="splash-content">
+        <h1>DFRP WILDFIRE SIM</h1>
+        <p>Real-time WebGL Physics Simulation v1.3</p>
+        <button id="startAppBtn">Start Simulation</button>
+    </div>
 </div>
 
 <div id="loading">Generating 100,000 Fuel Nodes...</div>
 
-<div id="compass">
-    <div id="compass-dial">
-        <div class="dir-label d-n">N</div>
-        <div class="dir-label d-e">E</div>
-        <div class="dir-label d-s">S</div>
-        <div class="dir-label d-w">W</div>
+<div id="mainHelpModal" class="modal-overlay">
+    <div class="modal-content">
+        <span class="close-modal" id="closeMainHelp">&times;</span>
+        <h2>User Guide & Simulation Details</h2>
+        
+        <h4>🎮 How to Use</h4>
+        <div class="key-instruction"><span class="key-icon">Left Click + Drag</span> Rotate Camera</div>
+        <div class="key-instruction"><span class="key-icon">Right Click + Drag</span> Pan Camera</div>
+        <div class="key-instruction"><span class="key-icon">Scroll Wheel</span> Zoom In / Out</div>
+        <div class="key-instruction"><span class="key-icon">Tool: 🔥</span> Click the fire icon, then click anywhere on the terrain to start a fire.</div>
+        <div class="key-instruction"><span class="key-icon">Tool: 🪓</span> Click the axe icon, then click on trees/grass to clear a firebreak.</div>
+
+        <h4>🌲 Simulation Models</h4>
+        <p>This simulator approximates complex forestry equations for real-time browser performance.</p>
+        <ul>
+            <li><strong>Surface Propagation:</strong> Based on a simplified version of the <em>Rothermel Surface Fire Spread Model</em>. It calculates spread vectors based on wind direction, slope steepness, and fuel proximity.</li>
+            <li><strong>Fuel Models (Anderson):</strong>
+                <ul>
+                    <li><strong>Grass (Model 1):</strong> High spread rate, low heat output.</li>
+                    <li><strong>Brush (Model 5):</strong> Medium spread, medium intensity.</li>
+                    <li><strong>Timber (Model 8):</strong> Slow spread, extreme heat/residence time.</li>
+                </ul>
+            </li>
+            <li><strong>Thermodynamics:</strong> Fire must boil off moisture content before combustion occurs. Wet fuel acts as a heat sink, while dry fuel releases energy instantly.</li>
+        </ul>
     </div>
 </div>
 
-<div id="moistureModal">
+<div id="moistureModal" class="modal-overlay">
     <div class="modal-content">
-        <span class="close-modal" id="closeModal">&times;</span>
+        <span class="close-modal" id="closeMoistModal">&times;</span>
         <h2>Fuel Moisture Physics</h2>
         
         <h4>1. The "Boiling Point" Delay</h4>
@@ -163,7 +201,6 @@
         <ul>
             <li><strong>Live to Drying:</strong> Occurs when moisture drops below 5x the base moisture setting.</li>
             <li><strong>Drying to Burning:</strong> Occurs when moisture hits 0.</li>
-            <li><strong>Insight:</strong> At 30%, the forest is roughly 3x harder to ignite than at 10% because heat must work longer to "drain" the water units.</li>
         </ul>
 
         <h4>3. Critical Scientific Values</h4>
@@ -173,17 +210,14 @@
             <li><strong>15% – 25%:</strong> <em>Moderate.</em> Patchy fire. Struggles to move tree-to-tree without high wind.</li>
             <li><strong>Above 30%:</strong> <em>The Extinction Point.</em> Fire cannot generate enough heat to sustain a flame.</li>
         </ul>
-
-        <h4>4. Wind Interaction</h4>
-        <ul>
-            <li><strong>Low Moisture + High Wind:</strong> Firestorm scenario. Rapid forward drying ahead of the flame front.</li>
-            <li><strong>High Moisture + High Wind:</strong> The "Protective" effect. Wind can blow heat away before it evaporates water in the next fuel source.</li>
-        </ul>
     </div>
 </div>
 
 <div id="ui">
-    <h3>DFRP Wildfire Simulator v1.3</h3>
+    <div class="header-row">
+        <h3>DFRP Simulator v1.3</h3>
+        <button id="mainHelpBtn" title="Help & Info">?</button>
+    </div>
     
     <div class="control">
         <label>Simulation Speed <span id="simSpeedVal" class="val">1.0x</span></label>
@@ -216,7 +250,6 @@
         <div class="l-item"><div class="box" style="background:#7cfc00"></div>Grass (Flat Tufts)</div>
         <div class="l-item"><div class="box" style="background:#556b2f"></div>Brush (Rounded Shrubs)</div>
         <div class="l-item"><div class="box" style="background:#004d00"></div>Timber (Pointed Trees)</div>
-        <div class="l-item"><div class="box" style="background:#d2b48c"></div>Flat Road</div>
     </div>
 </div>
 
@@ -231,13 +264,13 @@
 
     // --- Splash Screen Logic ---
     const splash = document.getElementById('splashScreen');
-    const loadMsg = document.getElementById('loading');
-    document.getElementById('startBtn').addEventListener('click', () => {
+    const startBtn = document.getElementById('startAppBtn');
+    
+    startBtn.addEventListener('click', () => {
         splash.style.opacity = '0';
-        setTimeout(() => { 
-            splash.style.display = 'none'; 
-            init(); // Start generation after splash
-        }, 500);
+        setTimeout(() => {
+            splash.style.display = 'none';
+        }, 800);
     });
 
     const CONFIG = {
@@ -291,15 +324,9 @@
     sun.shadow.mapSize.set(2048, 2048);
     scene.add(sun);
 
-    // --- Terrain & Road Logic ---
     function getElevation(x, z) { return Math.sin(x*0.005)*30 + Math.cos(z*0.004)*30 + Math.sin(x*0.01 + z*0.01)*15; }
     function isRiver(x, z) { return Math.abs(x - (Math.sin(z * 0.003) * 80 - 300)) < 25; }
     function isRoad(x, z) { return Math.abs(x - (Math.sin(z * 0.002) * 40 + 300)) < 6; }
-    
-    // NEW: East-West Road Logic
-    // Located around Z=100, 14 units wide, mostly straight
-    function isEWRoad(x, z) { return Math.abs(z - 100) < 14; }
-
     function getFuelType(x, z) {
         const n = Math.sin(x*0.003) + Math.cos(z*0.003); 
         if (n > 0.8) return F_TIMBER; 
@@ -318,30 +345,12 @@
         const x = gPos.getX(i), y = gPos.getY(i);
         let h = getElevation(x, -y);
         const fType = getFuelType(x, -y);
-        
-        // Base terrain color
         if(fType === F_GRASS) _c.setHex(0x9acd32); 
         else if(fType === F_TIMBER) _c.setHex(0x2f4f4f); 
         else _c.setHex(0x5c6b45); 
 
-        // River logic
-        if(isRiver(x, -y)) { 
-            h -= 12; 
-            _c.setHex(0x4da6ff); 
-        }
-        // NS Road logic
-        else if(isRoad(x, -y)) { 
-            h += 0.5; 
-            _c.setHex(0x777777); 
-        }
-
-        // NEW: EW Road Logic (Bridge behavior)
-        // We apply this last to overwrite river depth/color if they intersect
-        if(isEWRoad(x, -y)) {
-            // Force a flatter height, roughly average of terrain, effectively bridging the river
-            h = 10; 
-            _c.setHex(0xd2b48c); // Flat Beige
-        }
+        if(isRiver(x, -y)) { h -= 12; _c.setHex(0x4da6ff); }
+        else if(isRoad(x, -y)) { h += 0.5; _c.setHex(0x777777); }
 
         gPos.setZ(i, h);
         gCol.setXYZ(i, _c.r, _c.g, _c.b);
@@ -373,20 +382,17 @@
     let windVec = { x: 0, z: -1 }, windSpeed = 25, baseMoisture = 15;
 
     function init() {
-        loadMsg.style.display = 'flex';
+        document.getElementById('loading').style.display = 'flex';
         setTimeout(() => {
             spatialMap = new Array(mapDim*mapDim).fill(0).map(()=>[]);
             for(let i=0; i<CONFIG.count; i++) {
                 const idx = i * STRIDE;
                 const x = (Math.random()-0.5) * CONFIG.worldSize;
                 const z = (Math.random()-0.5) * CONFIG.worldSize;
-                
-                // Exclude trees from River, NS Road, and NEW EW Road
-                if (isRiver(x, z) || isRoad(x, z) || isEWRoad(x, z)) {
+                if (isRiver(x, z) || isRoad(x, z)) {
                     data[idx+6] = -100; data[idx+2] = S_CHARRED;
                     _mat.makeScale(0,0,0); mesh.setMatrixAt(i, _mat); continue;
                 }
-                
                 const y = getElevation(x, z), type = getFuelType(x, z), props = FUEL_PROPS[type];
                 data[idx] = x; data[idx+1] = z; data[idx+2] = S_LIVE; data[idx+3] = baseMoisture * 10;
                 data[idx+4] = (3000 * props.burn) * (0.8 + Math.random()*0.4); data[idx+6] = y; data[idx+7] = type;
@@ -404,7 +410,7 @@
             mesh.instanceMatrix.needsUpdate = true;
             mesh.instanceColor.needsUpdate = true;
             mesh.computeBoundingSphere();
-            loadMsg.style.display = 'none';
+            document.getElementById('loading').style.display = 'none';
         }, 100);
     }
 
@@ -539,11 +545,22 @@
         arrowHelper.setLength(60 + s);
     }
 
-    // Modal Controls
-    const modal = document.getElementById('moistureModal');
-    document.getElementById('infoBtn').onclick = () => modal.style.display = 'flex';
-    document.getElementById('closeModal').onclick = () => modal.style.display = 'none';
-    window.onclick = (e) => { if(e.target == modal) modal.style.display = 'none'; };
+    // --- Modal Controls ---
+    // Moisture Modal
+    const moistModal = document.getElementById('moistureModal');
+    document.getElementById('infoBtn').onclick = () => moistModal.style.display = 'flex';
+    document.getElementById('closeMoistModal').onclick = () => moistModal.style.display = 'none';
+
+    // Main Help Modal
+    const mainHelpModal = document.getElementById('mainHelpModal');
+    document.getElementById('mainHelpBtn').onclick = () => mainHelpModal.style.display = 'flex';
+    document.getElementById('closeMainHelp').onclick = () => mainHelpModal.style.display = 'none';
+
+    // Close on backdrop click
+    window.onclick = (e) => { 
+        if(e.target == moistModal) moistModal.style.display = 'none'; 
+        if(e.target == mainHelpModal) mainHelpModal.style.display = 'none'; 
+    };
 
     const tIgnite = document.getElementById('toolIgnite');
     const tCut = document.getElementById('toolCut');
@@ -581,23 +598,8 @@
         renderer.setSize(window.innerWidth, window.innerHeight);
     });
 
-    // We do NOT call init() immediately anymore, waiting for Splash screen start
-    updateInputs();
-
-    // Compass Rotation logic in animate loop
-    const compassDial = document.getElementById('compass-dial');
-    function animate() { 
-        requestAnimationFrame(animate); 
-        updatePhysics(); 
-        controls.update(); 
-        renderer.render(scene, camera); 
-
-        // Update compass based on camera angle
-        if(compassDial) {
-             const angle = controls.getAzimuthalAngle();
-             compassDial.style.transform = `rotate(${angle}rad)`;
-        }
-    }
+    init(); updateInputs();
+    function animate() { requestAnimationFrame(animate); updatePhysics(); controls.update(); renderer.render(scene, camera); }
     animate();
 </script>
 </body>
