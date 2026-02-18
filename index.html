@@ -105,9 +105,9 @@
             </ul>
             <strong>MODELS USED:</strong>
             <ul>
-                <li><strong>Terrain:</strong> Sinusoidal noise elevation with rivers, roads, and bridges.</li>
-                <li><strong>Anderson Logic:</strong> Discrete fuel types (Grass, Brush, Timber).</li>
-                <li><strong>Physics:</strong> Moisture-based evaporation and vector wind spread logic.</li>
+                <li><strong>Terrain:</strong> Advanced sinusoidal elevation with rivers, North-South road, and East-West bridge crossing.</li>
+                <li><strong>Anderson Logic:</strong> Fuel types (Grass, Brush, Timber).</li>
+                <li><strong>Physics:</strong> Moisture-based drying and vector-wind spread.</li>
             </ul>
         </div>
     </div>
@@ -154,7 +154,7 @@
     import * as THREE from 'three';
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-    // UI & Splash Management
+    // UI & Splash Logic
     const splash = document.getElementById('splash-screen');
     const infoPanel = document.getElementById('usage-info');
     document.getElementById('start-btn').onclick = () => { 
@@ -193,19 +193,22 @@
     const hemiLight = new THREE.HemisphereLight(0xffffff, 0xffffff, 0.7); scene.add(hemiLight);
     const sun = new THREE.DirectionalLight(0xffaa33, 1.4); sun.position.set(400, 700, 300); scene.add(sun);
 
-    // Terrain Logic with Bridge/E-W Road
+    // Terrain Functions
     function isRiver(x, z) { return Math.abs(x - (Math.sin(z * 0.003) * 80 - 300)) < 25; }
     function isRoad(x, z) { 
         const mainRoad = Math.abs(x - (Math.sin(z * 0.002) * 40 + 300)) < 6;
         const crossRoad = Math.abs(z - 100) < 6;
         return mainRoad || crossRoad;
     }
-    function isBridge(x, z) { return Math.abs(z - 100) < 7 && isRiver(x, z); }
+    function isBridge(x, z) { return Math.abs(z - 100) < 6.5 && isRiver(x, z); }
 
     function getElevation(x, z) { 
-        if (isBridge(x, z)) return 8; // Bridge deck height
-        let h = Math.sin(x*0.005)*30 + Math.cos(z*0.004)*30 + Math.sin(x*0.01 + z*0.01)*15; 
-        return h;
+        // Logic: Calculate road elevation at banks to keep bridge height consistent
+        if (isBridge(x, z)) {
+             // Sample elevation near the river bank to keep the road height level across the bridge
+             return Math.sin(-380*0.005)*30 + Math.cos(100*0.004)*30 + Math.sin(-380*0.01 + 100*0.01)*15 + 0.5;
+        }
+        return Math.sin(x*0.005)*30 + Math.cos(z*0.004)*30 + Math.sin(x*0.01 + z*0.01)*15;
     }
 
     function getFuelType(x, z) {
@@ -216,7 +219,7 @@
     }
 
     // Ground Construction
-    const groundGeo = new THREE.PlaneGeometry(1800, 1800, 150, 150);
+    const groundGeo = new THREE.PlaneGeometry(1800, 1800, 200, 200);
     const gCount = groundGeo.attributes.position.count;
     groundGeo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(gCount * 3), 3));
     const gPos = groundGeo.attributes.position;
@@ -228,18 +231,17 @@
         let h = getElevation(x, -y);
         const fType = getFuelType(x, -y);
         
-        // Base Colors
+        // Base land color
         if(fType === F_GRASS) _c.setHex(0x9acd32); 
         else if(fType === F_TIMBER) _c.setHex(0x2f4f4f); 
         else _c.setHex(0x5c6b45); 
 
-        // Feature Overrides
         if(isBridge(x, -y)) {
-            _c.setHex(0x555555); // Bridge Deck
+            _c.setHex(0x555555); // Bridge material
         } else if(isRoad(x, -y)) {
-            h += 0.5; _c.setHex(0x777777); 
+            h += 0.5; _c.setHex(0x777777); // Road surface
         } else if(isRiver(x, -y)) {
-            h -= 12; _c.setHex(0x4da6ff); 
+            h -= 12; _c.setHex(0x4da6ff); // Water
         }
 
         gPos.setZ(i, h);
@@ -250,7 +252,7 @@
     ground.rotation.x = -Math.PI/2;
     scene.add(ground);
 
-    // Fuel Nodes
+    // Fuel Instancing
     const fuelGeo = new THREE.DodecahedronGeometry(2, 0); 
     fuelGeo.translate(0, 1.5, 0);
     const mesh = new THREE.InstancedMesh(fuelGeo, new THREE.MeshStandardMaterial({ color: 0xffffff, flatShading: true }), CONFIG.count);
@@ -273,6 +275,7 @@
                 const x = (Math.random()-0.5) * CONFIG.worldSize;
                 const z = (Math.random()-0.5) * CONFIG.worldSize;
                 
+                // Clear road/river fuel
                 if (isRoad(x, z) || isRiver(x, z)) {
                     data[idx+6] = -100; data[idx+2] = S_CUT;
                     _mat.makeScale(0,0,0); mesh.setMatrixAt(i, _mat); continue;
@@ -296,7 +299,7 @@
 
     function updatePhysics() {
         for(let i=0; i<spatialMap.length; i++) spatialMap[i].length = 0;
-        let charCount = 0;
+        let charred = 0;
         for(let i=0; i<CONFIG.count; i++) {
             const st = data[i*STRIDE + 2];
             if(st === S_BURNING) {
@@ -304,11 +307,11 @@
                 const gz = Math.floor((data[i*STRIDE+1] + mapOffset) / CONFIG.cellSize);
                 if(gx>=0 && gx<mapDim && gz>=0 && gz<mapDim) spatialMap[gz*mapDim + gx].push(i);
             }
-            if(st === S_CHARRED) charCount++;
+            if(st === S_CHARRED) charred++;
         }
-        document.getElementById('acres').textContent = (charCount * 0.045).toFixed(2);
+        document.getElementById('acres').textContent = (charred * 0.045).toFixed(2);
 
-        let needColor = false, needMatrix = false;
+        let needC = false, needM = false;
         for(let i=0; i<CONFIG.count; i++) {
             const idx = i * STRIDE, state = data[idx+2];
             if(state === S_CHARRED || state === S_CUT) continue;
@@ -321,7 +324,7 @@
                     _vscale.set(FUEL_PROPS[data[idx+7]].scaleXZ, 0.05, FUEL_PROPS[data[idx+7]].scaleXZ);
                     _mat.compose(_vpos, new THREE.Quaternion(), _vscale);
                     mesh.setMatrixAt(i, _mat);
-                    needColor = true; needMatrix = true;
+                    needC = true; needM = true;
                 }
                 continue;
             }
@@ -347,18 +350,17 @@
             if(heat > 0) {
                 data[idx+3] -= heat * CONFIG.dryingRate;
                 if(state === S_LIVE && data[idx+3] < baseMoisture * 5) {
-                    data[idx+2] = S_DRYING; mesh.setColorAt(i, new THREE.Color(0xb8860b)); needColor = true;
+                    data[idx+2] = S_DRYING; mesh.setColorAt(i, new THREE.Color(0xb8860b)); needC = true;
                 }
                 if(data[idx+3] <= 0) {
-                    data[idx+2] = S_BURNING; mesh.setColorAt(i, new THREE.Color(0xff4500)); needColor = true;
+                    data[idx+2] = S_BURNING; mesh.setColorAt(i, new THREE.Color(0xff4500)); needC = true;
                 }
             }
         }
-        if(needColor) mesh.instanceColor.needsUpdate = true;
-        if(needMatrix) mesh.instanceMatrix.needsUpdate = true;
+        if(needC) mesh.instanceColor.needsUpdate = true;
+        if(needM) mesh.instanceMatrix.needsUpdate = true;
     }
 
-    // Interaction Tools
     const raycaster = new THREE.Raycaster(), mouse = new THREE.Vector2();
     window.addEventListener('mousedown', e => {
         if(e.target.tagName !== 'CANVAS' || !currentTool) return;
@@ -404,12 +406,10 @@
     document.getElementById('resetBtn').onclick = init;
 
     init(); updateInputs();
-    
     function animate() { 
         requestAnimationFrame(animate); 
         updatePhysics(); 
         controls.update(); 
-        // Compass logic: Sync N needle to world North based on camera azimuthal angle
         document.getElementById('compass-rose').style.transform = `rotate(${THREE.MathUtils.radToDeg(controls.getAzimuthalAngle())}deg)`;
         renderer.render(scene, camera); 
     }
