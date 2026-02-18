@@ -2,25 +2,21 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>DFRP Wildfire Simulator v1.0</title>
+    <title>DFRP Wildfire Simulator v1.1 - Enhanced Graphics</title>
     <style>
         body { margin: 0; overflow: hidden; background: #eef0f5; font-family: 'Segoe UI', sans-serif; }
-        
         #ui {
             position: absolute; top: 10px; left: 10px;
             background: rgba(255, 255, 255, 0.95); color: #333;
             padding: 15px; border-radius: 8px; border: 1px solid #ccc;
             width: 290px; user-select: none;
             box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-            max-height: 90vh; overflow-y: auto;
+            max-height: 90vh; overflow-y: auto; z-index: 10;
         }
-
         h3 { margin: 0 0 10px 0; color: #222; font-weight: 600; font-size: 16px; border-bottom: 2px solid #ddd; padding-bottom: 8px; }
-        
         .control { margin-bottom: 15px; }
         label { display: flex; justify-content: space-between; font-size: 11px; color: #666; margin-bottom: 5px; text-transform: uppercase; font-weight: bold; }
         input[type=range] { width: 100%; cursor: pointer; accent-color: #d32f2f; }
-        
         button#resetBtn { 
             background: #f0f0f0; color: #333; border: 1px solid #ccc; 
             padding: 8px; width: 100%; cursor: pointer; border-radius: 4px; 
@@ -28,17 +24,14 @@
             margin-top: 5px;
         }
         button#resetBtn:hover { background: #e0e0e0; }
-
         .val { color: #d32f2f; font-weight: 700; }
-        
         .legend { margin-top: 10px; border-top: 1px solid #eee; padding-top: 10px; font-size: 11px; }
         .l-item { display: flex; align-items: center; margin-bottom: 4px; }
         .box { width: 10px; height: 10px; margin-right: 8px; border-radius: 2px; }
-
         #toolbar {
             position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
             display: flex; gap: 15px; background: white; padding: 12px 20px;
-            border-radius: 50px; box-shadow: 0 5px 20px rgba(0,0,0,0.2);
+            border-radius: 50px; box-shadow: 0 5px 20px rgba(0,0,0,0.2); z-index: 10;
         }
         .tool {
             width: 60px; height: 60px; border-radius: 50%; border: 2px solid #eee;
@@ -52,7 +45,6 @@
             transform: scale(1.15); 
             box-shadow: 0 0 15px rgba(211, 47, 47, 0.4); 
         }
-
         #loading {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             background: #eef0f5; display: flex; justify-content: center; align-items: center;
@@ -70,44 +62,38 @@
 </head>
 <body>
 
-<div id="loading">Generating 100,000 Fuel Nodes...</div>
+<div id="loading">Generating Terrain & Particles...</div>
 
 <div id="ui">
-    <h3>DFRP Wildfire Simulator v1.0</h3>
-    
+    <h3>Wildfire Simulator v1.1</h3>
     <div class="control">
         <label>Simulation Speed <span id="simSpeedVal" class="val">1.0x</span></label>
         <input type="range" id="simSpeed" min="0.1" max="5.0" step="0.1" value="1.0">
     </div>
-
     <div class="control">
         <label>Wind Heading <span id="windDirVal" class="val">0°</span></label>
         <input type="range" id="windDir" min="0" max="360" value="0">
     </div>
-    
     <div class="control">
         <label>Wind Speed <span id="windSpeedVal" class="val">25</span></label>
         <input type="range" id="windSpeed" min="0" max="80" value="25">
     </div>
-
     <div class="control">
         <label>Fuel Moisture <span id="moistureVal" class="val">15%</span></label>
         <input type="range" id="moisture" min="5" max="30" value="15">
     </div>
-
     <button id="resetBtn">Regenerate Terrain</button>
-
     <div class="legend">
-        <strong>Fuel Models (Anderson):</strong>
-        <div class="l-item"><div class="box" style="background:#7cfc00"></div>Grass (Fast/Low Intensity)</div>
-        <div class="l-item"><div class="box" style="background:#556b2f"></div>Brush (Medium)</div>
-        <div class="l-item"><div class="box" style="background:#004d00"></div>Timber (Slow/High Intensity)</div>
+        <strong>Fuel Types:</strong>
+        <div class="l-item"><div class="box" style="background:#7cfc00"></div>Grass (Spiky)</div>
+        <div class="l-item"><div class="box" style="background:#556b2f"></div>Brush (Round)</div>
+        <div class="l-item"><div class="box" style="background:#004d00"></div>Timber (Tall)</div>
     </div>
 </div>
 
 <div id="toolbar">
-    <div class="tool" id="toolIgnite" title="Ignite Single Tree">🔥</div>
-    <div class="tool" id="toolCut" title="Precision Firebreak">🪓</div>
+    <div class="tool" id="toolIgnite" title="Ignite">🔥</div>
+    <div class="tool" id="toolCut" title="Firebreak">🪓</div>
 </div>
 
 <script type="module">
@@ -115,108 +101,107 @@
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
     const CONFIG = {
-        count: 100000, worldSize: 1500, cellSize: 20,
-        baseSpreadRate: 0.05, dryingRate: 0.07,
+        count: 80000, 
+        worldSize: 1500, 
+        cellSize: 20,
+        baseSpreadRate: 0.05, 
+        dryingRate: 0.07,
+        maxParticles: 15000
     };
 
     const S_LIVE = 0, S_DRYING = 1, S_BURNING = 2, S_CHARRED = 3, S_CUT = 4;
     const F_GRASS = 0, F_BRUSH = 1, F_TIMBER = 2;
 
     const FUEL_PROPS = {
-        [F_GRASS]:  { spread: 2.5, burn: 0.4,  scaleY: 0.3, scaleXZ: 0.6, col: 0x7cfc00 }, 
-        [F_BRUSH]:  { spread: 1.0, burn: 1.0,  scaleY: 0.8, scaleXZ: 1.0, col: 0x556b2f }, 
-        [F_TIMBER]: { spread: 0.4, burn: 3.5,  scaleY: 1.8, scaleXZ: 1.2, col: 0x004d00 }  
+        [F_GRASS]:  { spread: 2.8, burn: 0.4,  scaleY: 0.4, scaleXZ: 0.5, col: 0x7cfc00 }, 
+        [F_BRUSH]:  { spread: 1.2, burn: 1.2,  scaleY: 0.6, scaleXZ: 1.2, col: 0x556b2f }, 
+        [F_TIMBER]: { spread: 0.4, burn: 3.8,  scaleY: 2.2, scaleXZ: 1.4, col: 0x004d00 }  
     };
 
-    let currentTool = null; // Start with no tool selected
+    let currentTool = null;
     let simSpeedMultiplier = 1.0;
 
-    // --- SCENE & SKYBOX ---
     const scene = new THREE.Scene();
-    
-    // Create procedural skybox gradient
     const canvas = document.createElement('canvas');
     canvas.width = 2; canvas.height = 512;
     const context = canvas.getContext('2d');
     const gradient = context.createLinearGradient(0, 0, 0, 512);
-    gradient.addColorStop(0, '#8ab6ff'); // Blue top
-    gradient.addColorStop(0.6, '#eef0f5'); // Horizon color
-    context.fillStyle = gradient;
-    context.fillRect(0, 0, 2, 512);
+    gradient.addColorStop(0, '#1a1a2e'); gradient.addColorStop(0.6, '#454555');
+    context.fillStyle = gradient; context.fillRect(0, 0, 2, 512);
     scene.background = new THREE.CanvasTexture(canvas);
 
     const camera = new THREE.PerspectiveCamera(35, window.innerWidth/window.innerHeight, 5, 8000);
-    // Aligning camera to match the Screenshot perspective
-    camera.position.set(-600, 450, 1100);
+    camera.position.set(-800, 600, 1200);
     
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     document.body.appendChild(renderer.domElement);
 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
-    controls.target.set(0, 50, 0);
-    controls.maxPolarAngle = Math.PI / 2 - 0.1;
+    controls.maxPolarAngle = Math.PI / 2.1;
 
-    // --- LIGHTING ---
-    const hemiLight = new THREE.HemisphereLight(0xffffff, 0xffffff, 0.7);
+    const hemiLight = new THREE.HemisphereLight(0xaaaaaa, 0x444444, 0.6);
     scene.add(hemiLight);
-    const sun = new THREE.DirectionalLight(0xffaa33, 1.4);
-    sun.position.set(400, 700, 300);
+    const sun = new THREE.DirectionalLight(0xffccaa, 1.2);
+    sun.position.set(500, 800, 200);
     sun.castShadow = true;
-    sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.camera.left = -1000; sun.shadow.camera.right = 1000;
+    sun.shadow.camera.top = 1000; sun.shadow.camera.bottom = -1000;
     scene.add(sun);
 
     // --- TERRAIN ---
-    function getElevation(x, z) { return Math.sin(x*0.005)*30 + Math.cos(z*0.004)*30 + Math.sin(x*0.01 + z*0.01)*15; }
+    function getElevation(x, z) { return Math.sin(x*0.005)*40 + Math.cos(z*0.004)*40; }
     function isRiver(x, z) { return Math.abs(x - (Math.sin(z * 0.003) * 80 - 300)) < 25; }
-    function isRoad(x, z) { return Math.abs(x - (Math.sin(z * 0.002) * 40 + 300)) < 6; }
+    function isRoad(x, z) { return Math.abs(x - (Math.sin(z * 0.002) * 40 + 300)) < 8; }
     function getFuelType(x, z) {
         const n = Math.sin(x*0.003) + Math.cos(z*0.003); 
-        if (n > 0.8) return F_TIMBER; 
-        if (n < -0.5) return F_GRASS; 
+        if (n > 0.7) return F_TIMBER; 
+        if (n < -0.4) return F_GRASS; 
         return F_BRUSH; 
     }
 
-    const groundGeo = new THREE.PlaneGeometry(1800, 1800, 200, 200);
-    const gCount = groundGeo.attributes.position.count;
-    groundGeo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(gCount * 3), 3));
+    const groundGeo = new THREE.PlaneGeometry(2000, 2000, 150, 150);
     const gPos = groundGeo.attributes.position;
-    const gCol = groundGeo.attributes.color;
-    const _c = new THREE.Color();
-
-    for(let i=0; i<gCount; i++){
-        const x = gPos.getX(i), y = gPos.getY(i);
-        let h = getElevation(x, -y);
-        const fType = getFuelType(x, -y);
-        if(fType === F_GRASS) _c.setHex(0x9acd32); 
-        else if(fType === F_TIMBER) _c.setHex(0x2f4f4f); 
-        else _c.setHex(0x5c6b45); 
-
-        if(isRiver(x, -y)) { h -= 12; _c.setHex(0x4da6ff); }
-        else if(isRoad(x, -y)) { h += 0.5; _c.setHex(0x777777); }
-
-        gPos.setZ(i, h);
-        gCol.setXYZ(i, _c.r, _c.g, _c.b);
+    for(let i=0; i<gPos.count; i++) {
+        const x = gPos.getX(i), z = -gPos.getY(i);
+        gPos.setZ(i, getElevation(x, z));
     }
     groundGeo.computeVertexNormals();
-    const ground = new THREE.Mesh(groundGeo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9 }));
+    const ground = new THREE.Mesh(groundGeo, new THREE.MeshStandardMaterial({ color: 0x3d4a35, roughness: 0.8 }));
     ground.rotation.x = -Math.PI/2;
     ground.receiveShadow = true;
     scene.add(ground);
 
-    const arrowHelper = new THREE.ArrowHelper(new THREE.Vector3(0,0,-1), new THREE.Vector3(0,350,0), 100, 0xd32f2f);
+    const arrowHelper = new THREE.ArrowHelper(new THREE.Vector3(0,0,-1), new THREE.Vector3(0,400,0), 100, 0xff3300);
     scene.add(arrowHelper);
 
-    // --- TREES ---
-    const treeGeo = new THREE.CylinderGeometry(0, 1.8, 7, 4); 
-    treeGeo.translate(0, 3.5, 0);
-    const mesh = new THREE.InstancedMesh(treeGeo, new THREE.MeshStandardMaterial({ color: 0xffffff, flatShading: true }), CONFIG.count);
+    // --- INSTANCED MESH (Unified Material) ---
+    // We use a shared geometry but manipulate scale/type in init
+    const treeGeo = new THREE.CylinderGeometry(0, 1, 5, 4);
+    treeGeo.translate(0, 2.5, 0);
+    const mesh = new THREE.InstancedMesh(treeGeo, new THREE.MeshStandardMaterial({ flatShading: true }), CONFIG.count);
     mesh.castShadow = true;
-    mesh.receiveShadow = true;
     scene.add(mesh);
+
+    // --- PARTICLES (Fire/Smoke) ---
+    const pGeo = new THREE.BufferGeometry();
+    const pPos = new Float32Array(CONFIG.maxParticles * 3);
+    const pCol = new Float32Array(CONFIG.maxParticles * 3);
+    const pSize = new Float32Array(CONFIG.maxParticles);
+    pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
+    pGeo.setAttribute('color', new THREE.BufferAttribute(pCol, 3));
+    pGeo.setAttribute('size', new THREE.BufferAttribute(pSize, 1));
+
+    const pMat = new THREE.PointsMaterial({
+        size: 4, vertexColors: true, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, sizeAttenuation: true
+    });
+    const particles = new THREE.Points(pGeo, pMat);
+    scene.add(particles);
+
+    let pData = new Float32Array(CONFIG.maxParticles * 4); // x,y,z,life
+    let pIdx = 0;
 
     const STRIDE = 8;
     let data = new Float32Array(CONFIG.count * STRIDE);
@@ -224,7 +209,7 @@
     const mapDim = Math.ceil(CONFIG.worldSize / CONFIG.cellSize) + 2;
     const mapOffset = CONFIG.worldSize / 2;
 
-    const _mat = new THREE.Matrix4(), _vpos = new THREE.Vector3(), _vscale = new THREE.Vector3(), _vquat = new THREE.Quaternion(), _vcol = new THREE.Color();
+    const _mat = new THREE.Matrix4(), _vpos = new THREE.Vector3(), _vscale = new THREE.Vector3(), _vquat = new THREE.Quaternion();
     let windVec = { x: 0, z: -1 }, windSpeed = 25, baseMoisture = 15;
 
     function init() {
@@ -235,15 +220,25 @@
                 const idx = i * STRIDE;
                 const x = (Math.random()-0.5) * CONFIG.worldSize;
                 const z = (Math.random()-0.5) * CONFIG.worldSize;
+                
                 if (isRiver(x, z) || isRoad(x, z)) {
                     data[idx+6] = -100; data[idx+2] = S_CHARRED;
                     _mat.makeScale(0,0,0); mesh.setMatrixAt(i, _mat); continue;
                 }
+
                 const y = getElevation(x, z), type = getFuelType(x, z), props = FUEL_PROPS[type];
                 data[idx] = x; data[idx+1] = z; data[idx+2] = S_LIVE; data[idx+3] = baseMoisture * 10;
                 data[idx+4] = (3000 * props.burn) * (0.8 + Math.random()*0.4); data[idx+6] = y; data[idx+7] = type;
+                
                 _vpos.set(x, y, z);
-                const sY = props.scaleY * (0.8 + Math.random()*0.4), sXZ = props.scaleXZ * (0.8 + Math.random()*0.4);
+                
+                // Graphical Variations
+                let sY = props.scaleY * (0.8 + Math.random()*0.4);
+                let sXZ = props.scaleXZ * (0.8 + Math.random()*0.4);
+                
+                if(type === F_GRASS) { sY *= 0.5; sXZ *= 0.6; } // Spiky grass
+                else if(type === F_BRUSH) { sY *= 0.8; sXZ *= 1.3; } // Round bush
+
                 _vscale.set(sXZ, sY, sXZ);
                 _vquat.setFromAxisAngle(new THREE.Vector3(0,1,0), Math.random()*Math.PI*2);
                 _mat.compose(_vpos, _vquat, _vscale);
@@ -256,14 +251,23 @@
         }, 100);
     }
 
-    // --- INTERACTION ---
+    function spawnParticle(x, y, z, isSmoke) {
+        const i = pIdx * 3;
+        const i4 = pIdx * 4;
+        pPos[i] = x; pPos[i+1] = y; pPos[i+2] = z;
+        pData[i4] = x; pData[i4+1] = y; pData[i4+2] = z;
+        pData[i4+3] = 1.0; // life
+        
+        const col = isSmoke ? new THREE.Color(0x333333) : new THREE.Color(0xff6600);
+        pCol[i] = col.r; pCol[i+1] = col.g; pCol[i+2] = col.b;
+        pSize[pIdx] = isSmoke ? 8 + Math.random()*10 : 4 + Math.random()*4;
+
+        pIdx = (pIdx + 1) % CONFIG.maxParticles;
+    }
+
     const raycaster = new THREE.Raycaster(), mouse = new THREE.Vector2();
     let isDragging = false;
-
-    window.addEventListener('mousedown', e => {
-        if(e.target.tagName !== 'CANVAS' || !currentTool) return;
-        isDragging = true; handleInput(e);
-    });
+    window.addEventListener('mousedown', e => { if(e.target.tagName === 'CANVAS' && currentTool) { isDragging = true; handleInput(e); } });
     window.addEventListener('mousemove', e => { if(isDragging) handleInput(e); });
     window.addEventListener('mouseup', () => isDragging = false);
 
@@ -274,30 +278,21 @@
         const hits = raycaster.intersectObject(ground);
         if(hits.length > 0) {
             const pt = hits[0].point;
-            if(currentTool === 'ignite') {
-                let closestIdx = -1, minDistSq = Infinity;
-                for(let i=0; i<CONFIG.count; i++) {
-                    const idx = i*STRIDE;
-                    if(data[idx+6] < -50) continue;
-                    const dSq = Math.pow(data[idx]-pt.x, 2) + Math.pow(data[idx+1]-pt.z, 2);
-                    if(dSq < 900 && dSq < minDistSq) { minDistSq = dSq; closestIdx = idx; }
-                }
-                if(closestIdx !== -1) { data[closestIdx+2] = S_BURNING; data[closestIdx+3] = 0; }
-            } else if(currentTool === 'cut') {
-                let needsUpdate = false;
-                for(let i=0; i<CONFIG.count; i++) {
-                    const idx = i*STRIDE;
-                    if(data[idx+6] < -50) continue;
-                    if(Math.pow(data[idx]-pt.x, 2) + Math.pow(data[idx+1]-pt.z, 2) < 56) {
-                        data[idx+2] = S_CUT; _mat.makeScale(0,0,0); mesh.setMatrixAt(i, _mat); needsUpdate = true;
+            for(let i=0; i<CONFIG.count; i++) {
+                const idx = i*STRIDE;
+                const dSq = Math.pow(data[idx]-pt.x, 2) + Math.pow(data[idx+1]-pt.z, 2);
+                if(dSq < (currentTool === 'cut' ? 100 : 400)) {
+                    if(currentTool === 'ignite' && data[idx+2] === S_LIVE) {
+                        data[idx+2] = S_BURNING; data[idx+3] = 0;
+                    } else if(currentTool === 'cut') {
+                        data[idx+2] = S_CUT; _mat.makeScale(0,0,0); mesh.setMatrixAt(i, _mat);
                     }
                 }
-                if(needsUpdate) mesh.instanceMatrix.needsUpdate = true;
             }
+            mesh.instanceMatrix.needsUpdate = true;
         }
     }
 
-    // --- PHYSICS ---
     function updatePhysics() {
         for(let i=0; i<spatialMap.length; i++) spatialMap[i].length = 0;
         let bCount = 0;
@@ -307,58 +302,66 @@
                 const gx = Math.floor((data[i*STRIDE] + mapOffset) / CONFIG.cellSize);
                 const gz = Math.floor((data[i*STRIDE+1] + mapOffset) / CONFIG.cellSize);
                 if(gx>=0 && gx<mapDim && gz>=0 && gz<mapDim) spatialMap[gz*mapDim + gx].push(i);
+                
+                // Spawn visuals
+                if(Math.random() > 0.7) spawnParticle(data[i*STRIDE], data[i*STRIDE+6]+2, data[i*STRIDE+1], false);
+                if(Math.random() > 0.9) spawnParticle(data[i*STRIDE], data[i*STRIDE+6]+10, data[i*STRIDE+1], true);
             }
         }
+
+        // Particle movement
+        for(let i=0; i<CONFIG.maxParticles; i++) {
+            if(pData[i*4+3] <= 0) continue;
+            pData[i*4+3] -= 0.01 * simSpeedMultiplier;
+            pPos[i*3] += (windVec.x * windSpeed * 0.01) + (Math.random()-0.5);
+            pPos[i*3+1] += 0.5 * simSpeedMultiplier;
+            pPos[i*3+2] += (windVec.z * windSpeed * 0.01) + (Math.random()-0.5);
+            if(pData[i*4+3] <= 0) pSize[i] = 0;
+        }
+        particles.geometry.attributes.position.needsUpdate = true;
+        particles.geometry.attributes.size.needsUpdate = true;
+
         if(bCount === 0) return;
 
         let needColor = false, needMatrix = false;
         for(let i=0; i<CONFIG.count; i++) {
             const idx = i * STRIDE, state = data[idx+2];
             if(state === S_CHARRED || state === S_CUT) continue;
+            
             if(state === S_BURNING) {
                 data[idx+4] -= 1.0 * simSpeedMultiplier;
                 if(data[idx+4] <= 0) {
                     data[idx+2] = S_CHARRED;
                     mesh.setColorAt(i, new THREE.Color(0x111111));
-                    _vpos.set(data[idx], data[idx+6], data[idx+1]);
-                    _vscale.set(FUEL_PROPS[data[idx+7]].scaleXZ, 0.1, FUEL_PROPS[data[idx+7]].scaleXZ);
-                    _mat.compose(_vpos, new THREE.Quaternion(0,0,0,1), _vscale);
+                    _mat.makeTranslation(data[idx], data[idx+6], data[idx+1]);
+                    _mat.scale(new THREE.Vector3(1, 0.1, 1));
                     mesh.setMatrixAt(i, _mat);
                     needColor = true; needMatrix = true;
-                } else if(Math.random() > 0.95) {
-                    _vcol.setHSL(0.05 + Math.random()*0.05, 1.0, (0.5 + Math.random()*0.5) * 0.6);
-                    mesh.setColorAt(i, _vcol); needColor = true;
                 }
                 continue;
             }
-            const tx = data[idx], tz = data[idx+1], ty = data[idx+6];
-            const gx = Math.floor((tx + mapOffset) / CONFIG.cellSize), gz = Math.floor((tz + mapOffset) / CONFIG.cellSize);
-            
-            let heat = 0, hasFire = false;
-            for(let nz = gz-1; nz <= gz+1; nz++) {
-                for(let nx = gx-1; nx <= gx+1; nx++) {
-                    if(nx>=0 && nx<mapDim && nz>=0 && nz<mapDim && spatialMap[nz*mapDim+nx].length > 0) hasFire = true;
-                }
-            }
-            if(!hasFire) continue;
 
+            // Fire Spread Logic
+            const gx = Math.floor((data[idx] + mapOffset) / CONFIG.cellSize), gz = Math.floor((data[idx+1] + mapOffset) / CONFIG.cellSize);
+            let heat = 0;
             for(let nz = gz-1; nz <= gz+1; nz++) {
                 for(let nx = gx-1; nx <= gx+1; nx++) {
-                    if(nx<0 || nx>=mapDim || nz<0 || nz>=mapDim) continue;
-                    const cell = spatialMap[nz*mapDim+nx];
-                    for(let k=0; k<cell.length; k++) {
-                        const nIdx = cell[k] * STRIDE;
-                        const dx = tx-data[nIdx], dz = tz-data[nIdx+1], dy = ty-data[nIdx+6];
-                        const dSq = dx*dx + dz*dz;
-                        if(dSq < 900) {
-                            const d = Math.sqrt(dSq), dot = (dx/d)*windVec.x + (dz/d)*windVec.z;
-                            let wB = dot > 0 ? 1.0 + (dot*windSpeed*0.15) : Math.max(0.1, 1.0 + dot*0.8);
-                            let sB = (dy/(d+0.1)) > 0 ? 1.0 + (dy/(d+0.1))*6.0 : Math.max(0.2, 1.0 + (dy/(d+0.1)));
-                            heat += (1.0 - d/30) * wB * sB * FUEL_PROPS[data[nIdx+7]].spread * CONFIG.baseSpreadRate * simSpeedMultiplier;
+                    if(nx>=0 && nx<mapDim && nz>=0 && nz<mapDim) {
+                        const cell = spatialMap[nz*mapDim+nx];
+                        for(let k=0; k<cell.length; k++) {
+                            const nIdx = cell[k] * STRIDE;
+                            const dx = data[idx]-data[nIdx], dz = data[idx+1]-data[nIdx+1];
+                            const dSq = dx*dx + dz*dz;
+                            if(dSq < 900) {
+                                const d = Math.sqrt(dSq), dot = (dx/d)*windVec.x + (dz/d)*windVec.z;
+                                let wB = dot > 0 ? 1.0 + (dot*windSpeed*0.15) : 0.5;
+                                heat += (1.0 - d/30) * wB * FUEL_PROPS[data[nIdx+7]].spread * CONFIG.baseSpreadRate * simSpeedMultiplier;
+                            }
                         }
                     }
                 }
             }
+
             if(heat > 0) {
                 data[idx+3] -= heat * CONFIG.dryingRate;
                 if(state === S_LIVE && data[idx+3] < baseMoisture * 5) {
@@ -373,7 +376,6 @@
         if(needMatrix) mesh.instanceMatrix.needsUpdate = true;
     }
 
-    // --- UI LOGIC ---
     function updateInputs() {
         const d = parseInt(document.getElementById('windDir').value);
         const s = parseInt(document.getElementById('windSpeed').value);
@@ -392,35 +394,14 @@
 
     const tIgnite = document.getElementById('toolIgnite');
     const tCut = document.getElementById('toolCut');
-    
-    // Updated Tool Toggle Logic
-    tIgnite.addEventListener('click', () => {
-        if (currentTool === 'ignite') {
-            currentTool = null;
-            tIgnite.classList.remove('active');
-        } else {
-            currentTool = 'ignite';
-            tIgnite.classList.add('active');
-            tCut.classList.remove('active');
-        }
-    });
-
-    tCut.addEventListener('click', () => {
-        if (currentTool === 'cut') {
-            currentTool = null;
-            tCut.classList.remove('active');
-        } else {
-            currentTool = 'cut';
-            tCut.classList.add('active');
-            tIgnite.classList.remove('active');
-        }
-    });
+    tIgnite.addEventListener('click', () => { currentTool = currentTool === 'ignite' ? null : 'ignite'; tIgnite.classList.toggle('active', !!currentTool); tCut.classList.remove('active'); });
+    tCut.addEventListener('click', () => { currentTool = currentTool === 'cut' ? null : 'cut'; tCut.classList.toggle('active', !!currentTool); tIgnite.classList.remove('active'); });
 
     document.getElementById('windDir').addEventListener('input', updateInputs);
     document.getElementById('windSpeed').addEventListener('input', updateInputs);
     document.getElementById('moisture').addEventListener('input', updateInputs);
     document.getElementById('simSpeed').addEventListener('input', updateInputs);
-    document.getElementById('resetBtn').addEventListener('click', init);
+    document.getElementById('resetBtn').addEventListener('click', () => location.reload());
 
     window.addEventListener('resize', () => {
         camera.aspect = window.innerWidth/window.innerHeight; camera.updateProjectionMatrix();
