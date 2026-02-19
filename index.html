@@ -2,85 +2,194 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>DFRP Wildfire Simulator v1.5 - Chinook Update</title>
+    <title>DFRP Wildfire Simulator v1.5 - Chinook & Day/Night</title>
     <style>
         body { margin: 0; overflow: hidden; background: #eef0f5; font-family: 'Segoe UI', sans-serif; }
         
-        /* --- UI STYLES --- */
+        /* --- SPLASH SCREEN STYLES --- */
         #splashScreen {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: #111; z-index: 2000;
+            background: #111;
+            background-size: cover;
+            z-index: 2000;
             display: flex; flex-direction: column; align-items: center; justify-content: center;
             transition: opacity 0.8s ease-out;
         }
-        .splash-content { text-align: center; color: white; animation: fadeIn 1.5s ease-out; }
-        .splash-content h1 { font-size: 3.5rem; margin-bottom: 10px; letter-spacing: 2px; }
+        #splashOverlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.4); z-index: -1;
+        }
+        .splash-content {
+            text-align: center; color: white; z-index: 1;
+            animation: fadeIn 1.5s ease-out;
+        }
+        .splash-content h1 {
+            font-size: 3.5rem; margin-bottom: 10px; text-shadow: 0 4px 10px rgba(0,0,0,0.5);
+            letter-spacing: 2px;
+        }
+        .splash-content p { font-size: 1.2rem; color: #ddd; margin-bottom: 40px; }
         #startAppBtn {
             padding: 15px 50px; font-size: 18px; font-weight: bold; text-transform: uppercase;
             background: #d32f2f; color: white; border: none; border-radius: 50px;
             cursor: pointer; box-shadow: 0 0 20px rgba(211, 47, 47, 0.6);
-            transition: 0.2s;
+            transition: transform 0.2s, background 0.2s, box-shadow 0.2s;
         }
-        #startAppBtn:hover { transform: scale(1.05); background: #b71c1c; }
+        #startAppBtn:hover {
+            background: #b71c1c; transform: scale(1.05); box-shadow: 0 0 30px rgba(211, 47, 47, 0.9);
+        }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
 
+        /* --- UI STYLES --- */
         #ui {
             position: absolute; top: 10px; left: 10px;
             background: rgba(255, 255, 255, 0.95); color: #333;
-            padding: 15px; border-radius: 8px; width: 290px;
+            padding: 15px; border-radius: 8px; border: 1px solid #ccc;
+            width: 290px; user-select: none;
             box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-            z-index: 10; transition: transform 0.5s ease, opacity 0.5s ease;
+            max-height: 90vh; overflow-y: auto; z-index: 10;
+            transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.5s ease;
         }
         .ui-hidden { transform: translateX(-320px); opacity: 0; }
 
-        .control { margin-bottom: 12px; }
-        label { display: flex; justify-content: space-between; font-size: 11px; color: #666; font-weight: bold; text-transform: uppercase; }
-        input[type=range] { width: 100%; accent-color: #d32f2f; cursor: pointer; }
-        .val { color: #d32f2f; font-weight: 700; }
+        .header-row { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #ddd; padding-bottom: 8px; margin-bottom: 10px; }
+        h3 { margin: 0; color: #222; font-weight: 600; font-size: 16px; }
+        #mainHelpBtn {
+            background: #333; color: white; border: none; border-radius: 4px;
+            width: 24px; height: 24px; cursor: pointer; font-weight: bold;
+            display: flex; align-items: center; justify-content: center;
+        }
+        #mainHelpBtn:hover { background: #d32f2f; }
+        .control { margin-bottom: 15px; }
+        label { display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: #666; margin-bottom: 5px; text-transform: uppercase; font-weight: bold; }
+        input[type=range] { width: 100%; cursor: pointer; accent-color: #d32f2f; }
+        button#resetBtn { 
+            background: #f0f0f0; color: #333; border: 1px solid #ccc; 
+            padding: 8px; width: 100%; cursor: pointer; border-radius: 4px; 
+            font-size: 11px; text-transform: uppercase; font-weight: bold; transition: 0.2s;
+            margin-top: 5px;
+        }
+        button#resetBtn:hover { background: #e0e0e0; }
+        .val { color: #d32f2f; font-weight: 700; margin-left: auto; margin-right: 8px; }
+        .info-trigger {
+            background: #999; color: white; border-radius: 50%; width: 14px; height: 14px;
+            display: inline-flex; align-items: center; justify-content: center;
+            font-size: 9px; cursor: pointer; transition: 0.2s; border: none;
+        }
+        .info-trigger:hover { background: #d32f2f; }
 
+        .modal-overlay {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.7); z-index: 2100; justify-content: center; align-items: center;
+            padding: 20px; box-sizing: border-box; backdrop-filter: blur(4px);
+        }
+        .modal-content {
+            background: white; padding: 30px; border-radius: 12px; max-width: 650px; width: 100%;
+            max-height: 85vh; overflow-y: auto; position: relative; line-height: 1.6; font-size: 14px; color: #444;
+        }
+        .close-modal { position: absolute; top: 15px; right: 15px; font-size: 24px; cursor: pointer; color: #999; }
+        .close-modal:hover { color: #d32f2f; }
+        .modal-content h2 { margin-top: 0; color: #d32f2f; border-bottom: 1px solid #eee; padding-bottom: 15px; }
+        .modal-content h4 { color: #222; margin: 20px 0 8px 0; font-size: 16px; border-left: 4px solid #d32f2f; padding-left: 10px; }
+        
+        .legend { margin-top: 10px; border-top: 1px solid #eee; padding-top: 10px; font-size: 11px; }
+        .l-item { display: flex; align-items: center; margin-bottom: 4px; }
+        .box { width: 10px; height: 10px; margin-right: 8px; border-radius: 2px; }
+
+        /* --- TOOLBAR STYLES --- */
         #toolbar {
             position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
-            display: flex; gap: 15px; background: white; padding: 10px 20px;
+            display: flex; gap: 20px; background: white; padding: 12px 25px;
             border-radius: 50px; box-shadow: 0 5px 20px rgba(0,0,0,0.2);
             z-index: 100; align-items: center;
+            transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.5s ease;
         }
+        .toolbar-hidden { transform: translate(-50%, 120px) !important; opacity: 0; }
+
         .tool {
-            width: 50px; height: 50px; border-radius: 50%; border: 2px solid #eee;
-            background: white; cursor: pointer; font-size: 22px; display: flex;
+            width: 54px; height: 54px; border-radius: 50%; border: 2px solid #eee;
+            background: white; cursor: pointer; font-size: 24px; display: flex;
             align-items: center; justify-content: center; transition: 0.2s;
         }
-        .tool.active { border-color: #d32f2f; background: #fff0f0; transform: scale(1.1); }
-        
-        .data-readout { border-left: 1px solid #eee; padding: 0 15px; text-align: center; }
-        .data-label { font-size: 9px; color: #999; font-weight: 800; display: block; }
-        .data-val { font-size: 15px; font-weight: 700; color: #333; }
+        .tool:hover { transform: scale(1.1); background: #f9f9f9; }
+        .tool.active { border-color: #d32f2f; background: #fff0f0; transform: scale(1.15); box-shadow: 0 0 15px rgba(211, 47, 47, 0.4); }
+
+        .data-readout {
+            display: flex; flex-direction: column; align-items: center;
+            min-width: 80px; border-left: 1px solid #eee; border-right: 1px solid #eee;
+            padding: 0 15px;
+        }
+        .data-label { font-size: 9px; text-transform: uppercase; color: #999; font-weight: 800; letter-spacing: 0.5px; }
+        .data-val { font-size: 16px; font-weight: 700; color: #333; font-variant-numeric: tabular-nums; }
+
+        #compass {
+            width: 54px; height: 54px; border-radius: 50%;
+            background: #222; border: 2px solid #444;
+            display: flex; align-items: center; justify-content: center;
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
+        }
+        #compassSvg { width: 100%; height: 100%; will-change: transform; }
 
         #loading {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             background: #eef0f5; display: flex; flex-direction: column; justify-content: center; align-items: center;
-            font-size: 20px; color: #555; z-index: 999;
+            font-size: 24px; color: #555; z-index: 999;
         }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
     </style>
     <script type="importmap">
-        { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js", "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/" } }
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
     </script>
 </head>
 <body>
 
 <div id="splashScreen">
+    <div id="splashOverlay"></div>
     <div class="splash-content">
         <h1>DFRP WILDFIRE SIM</h1>
-        <p>GPGPU Physics & Aerial Suppression Update</p>
-        <button id="startAppBtn">Enter Simulation</button>
+        <p>Real-time WebGL Physics Simulation v1.5 [Chinook Update]</p>
+        <button id="startAppBtn">Start Simulation</button>
     </div>
 </div>
 
-<div id="loading">Generating Environment...</div>
+<div id="loading">
+    <div>Generating Environment...</div>
+    <div style="font-size: 14px; margin-top: 10px;">Syncing Sun Position...</div>
+</div>
+
+<div id="mainHelpModal" class="modal-overlay">
+    <div class="modal-content">
+        <span class="close-modal" id="closeMainHelp">&times;</span>
+        <h2>System Guide & Chinook Ops</h2>
+        <h4>🎮 Controls</h4>
+        <p>LMB + Drag: Rotate Camera / Right Click: Pan</p>
+        <p>🚁 Tool: Click anywhere to request a heavy water drop.</p>
+        <h4>🧠 Models</h4>
+        <p>Rothermel-based fire spread with dynamic day/night lighting. Chinook suppression resets fuel moisture debt within a 25m radius.</p>
+    </div>
+</div>
+
+<div id="moistureModal" class="modal-overlay">
+    <div class="modal-content">
+        <span class="close-modal" id="closeMoistModal">&times;</span>
+        <h2>Fuel State Legend</h2>
+        <div class="l-item"><div class="box" style="background:#004d00"></div><strong>Green:</strong> Live.</div>
+        <div class="l-item"><div class="box" style="background:#b8860b"></div><strong>Gold:</strong> Drying.</div>
+        <div class="l-item"><div class="box" style="background:#ff4500"></div><strong>Orange:</strong> Burning.</div>
+        <div class="l-item"><div class="box" style="background:#111111"></div><strong>Black:</strong> Charred.</div>
+    </div>
+</div>
 
 <div id="ui">
-    <h3 style="margin:0 0 10px 0; font-size:16px;">System Parameters</h3>
+    <div class="header-row">
+        <h3>DFRP Simulator v1.5</h3>
+        <button id="mainHelpBtn" title="Help & Info">?</button>
+    </div>
     <div class="control">
-        <label>Sim Speed <span id="simSpeedVal" class="val">1.0x</span></label>
+        <label>Simulation Speed <span id="simSpeedVal" class="val">1.0x</span></label>
         <input type="range" id="simSpeed" min="0.1" max="5.0" step="0.1" value="1.0">
     </div>
     <div class="control">
@@ -92,24 +201,39 @@
         <input type="range" id="windSpeed" min="0" max="80" value="25">
     </div>
     <div class="control">
-        <label>Base Moisture <span id="moistureVal" class="val">15%</span></label>
+        <label>Fuel Moisture <span id="moistureVal" class="val">15%</span><button class="info-trigger" id="infoBtn">i</button></label>
         <input type="range" id="moisture" min="5" max="30" value="15">
     </div>
-    <button id="resetBtn" style="width:100%; padding:8px; cursor:pointer;">Regenerate Terrain</button>
+    <button id="resetBtn">Regenerate Terrain</button>
+    <div class="legend">
+        <strong>Map Features:</strong>
+        <div class="l-item"><div class="box" style="background:#777"></div>Roads / Crossroads</div>
+        <div class="l-item"><div class="box" style="background:#4da6ff"></div>River (Firebreak)</div>
+        <div class="l-item"><div class="box" style="background:#004d00"></div>Timber Fuel</div>
+    </div>
 </div>
 
 <div id="toolbar">
-    <div class="tool" id="toolIgnite" title="Ignite Fire">🔥</div>
-    <div class="tool" id="toolCut" title="Firebreak">🪓</div>
-    <div class="tool" id="toolWater" title="Chinook Drop">🚁</div>
+    <div class="tool" id="toolIgnite" title="Ignite Single Tree">🔥</div>
+    <div class="tool" id="toolCut" title="Precision Firebreak">🪓</div>
+    <div class="tool" id="toolWater" title="Chinook Sortie">🚁</div>
     
     <div class="data-readout">
-        <span class="data-label">Time</span>
+        <span class="data-label">Time of Day</span>
         <span class="data-val" id="timeDisplay">10:00 AM</span>
     </div>
+
     <div class="data-readout">
-        <span class="data-label">Acres</span>
+        <span class="data-label">Acres Burned</span>
         <span class="data-val" id="acresDisplay">0.0</span>
+    </div>
+
+    <div id="compass" title="Terrain Orientation">
+        <svg id="compassSvg" viewBox="0 0 100 100">
+            <circle cx="50" cy="50" r="46" fill="#222" stroke="#555" stroke-width="2"/>
+            <text x="50" y="24" font-family="Arial" font-weight="bold" font-size="14" fill="#d32f2f" text-anchor="middle">N</text>
+            <path d="M50 28 L46 36 L54 36 Z" fill="#d32f2f" />
+        </svg>
     </div>
 </div>
 
@@ -118,8 +242,8 @@
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
     const CONFIG = {
-        count: 80000, worldSize: 1500, cellSize: 25,
-        baseSpreadRate: 0.05, dryingRate: 0.08,
+        count: 100000, worldSize: 1500, cellSize: 20,
+        baseSpreadRate: 0.05, dryingRate: 0.07,
         acreageConstant: 0.012 
     };
 
@@ -127,12 +251,11 @@
     const F_GRASS = 0, F_BRUSH = 1, F_TIMBER = 2;
 
     const FUEL_PROPS = {
-        [F_GRASS]:  { spread: 2.5, burn: 0.4,  scaleY: 0.15, col: 0x9acd32 }, 
-        [F_BRUSH]:  { spread: 1.0, burn: 1.0,  scaleY: 0.6,  col: 0x556b2f }, 
-        [F_TIMBER]: { spread: 0.4, burn: 3.5,  scaleY: 2.5,  col: 0x004d00 }  
+        [F_GRASS]:  { spread: 2.5, burn: 0.4,  scaleY: 0.15, scaleXZ: 1.2, col: 0x7cfc00 }, 
+        [F_BRUSH]:  { spread: 1.0, burn: 1.0,  scaleY: 0.6,  scaleXZ: 1.5, col: 0x556b2f }, 
+        [F_TIMBER]: { spread: 0.4, burn: 3.5,  scaleY: 2.2,  scaleXZ: 1.0, col: 0x004d00 }  
     };
 
-    // Simulation Data
     let currentTool = null;
     let simSpeedMultiplier = 1.0;
     let spatialMap = [];
@@ -144,25 +267,21 @@
     let data = new Float32Array(CONFIG.count * STRIDE);
 
     // Chinook State
-    const heliState = {
-        active: false,
-        phase: 'idle', // idle, approach, dropping, returning
-        target: new THREE.Vector3(),
-        dropTimer: 0
-    };
+    const heliState = { phase: 'idle', target: new THREE.Vector3(), dropTimer: 0 };
 
-    // Environment helpers
-    const getElevation = (x, z) => Math.sin(x*0.005)*30 + Math.cos(z*0.004)*30 + Math.sin(x*0.01 + z*0.01)*15;
-    const isRiver = (x, z) => Math.abs(x - (Math.sin(z * 0.003) * 80 - 300)) < 25;
-    const getFuelType = (x, z) => {
+    function getElevation(x, z) { return Math.sin(x*0.005)*30 + Math.cos(z*0.004)*30 + Math.sin(x*0.01 + z*0.01)*15; }
+    function isRiver(x, z) { return Math.abs(x - (Math.sin(z * 0.003) * 80 - 300)) < 25; }
+    function isRoadNS(x, z) { return Math.abs(x - (Math.sin(z * 0.002) * 40 + 300)) < 6; }
+    function isRoadEW(z) { return Math.abs(z - 150) < 8; }
+    function isUrban(x, z) { return Math.abs(x - 300) < 80 && Math.abs(z - 150) < 80; }
+    function getFuelType(x, z) {
         const n = Math.sin(x*0.003) + Math.cos(z*0.003); 
         return n > 0.8 ? F_TIMBER : (n < -0.5 ? F_GRASS : F_BRUSH);
-    };
+    }
 
-    // Setup Scene
     const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(40, window.innerWidth/window.innerHeight, 1, 10000);
-    camera.position.set(-800, 600, 1000);
+    const camera = new THREE.PerspectiveCamera(35, window.innerWidth/window.innerHeight, 0.1, 15000);
+    camera.position.set(-600, 450, 1100);
     
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
@@ -170,263 +289,278 @@
     document.body.appendChild(renderer.domElement);
 
     const controls = new OrbitControls(camera, renderer.domElement);
-    controls.maxPolarAngle = Math.PI / 2.1;
+    controls.enableDamping = true;
+    controls.maxPolarAngle = Math.PI / 2 - 0.1;
 
-    // Lighting
-    const sun = new THREE.DirectionalLight(0xffffff, 1.5);
+    // --- LIGHTING ---
+    const sun = new THREE.DirectionalLight(0xffffff, 1.4);
     sun.castShadow = true;
-    sun.shadow.mapSize.set(1024, 1024);
-    sun.shadow.camera.left = -800; sun.shadow.camera.right = 800;
-    sun.shadow.camera.top = 800; sun.shadow.camera.bottom = -800;
+    sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.camera.left = -1000; sun.shadow.camera.right = 1000;
+    sun.shadow.camera.top = 1000; sun.shadow.camera.bottom = -1000;
     scene.add(sun);
-    const ambient = new THREE.HemisphereLight(0xffffff, 0x444444, 0.6);
-    scene.add(ambient);
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.8);
+    scene.add(hemiLight);
 
-    // Ground
-    const groundGeo = new THREE.PlaneGeometry(2000, 2000, 100, 100);
+    // --- TERRAIN ---
+    const groundGeo = new THREE.PlaneGeometry(1800, 1800, 200, 200);
+    const gCount = groundGeo.attributes.position.count;
+    groundGeo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(gCount * 3), 3));
     const gPos = groundGeo.attributes.position;
-    for(let i=0; i<gPos.count; i++) {
-        gPos.setZ(i, getElevation(gPos.getX(i), -gPos.getY(i)));
+    const gCol = groundGeo.attributes.color;
+    const _c = new THREE.Color();
+
+    for(let i=0; i<gCount; i++){
+        const x = gPos.getX(i), y = gPos.getY(i);
+        let h = getElevation(x, -y);
+        const fType = getFuelType(x, -y);
+        if(fType === F_GRASS) _c.setHex(0x9acd32); 
+        else if(fType === F_TIMBER) _c.setHex(0x2f4f4f); 
+        else _c.setHex(0x5c6b45); 
+        if (isUrban(x, -y)) { h = getElevation(300, 150) + 0.5; _c.setHex(0x999999); }
+        if (isRoadEW(-y)) { h += 1.2; _c.setHex(0x444444); } 
+        else if(isRiver(x, -y)) { h -= 12; _c.setHex(0x4da6ff); }
+        else if(isRoadNS(x, -y)) { h += 0.8; _c.setHex(0x555555); }
+        gPos.setZ(i, h); gCol.setXYZ(i, _c.r, _c.g, _c.b);
     }
     groundGeo.computeVertexNormals();
-    const ground = new THREE.Mesh(groundGeo, new THREE.MeshStandardMaterial({ color: 0x3d4d3d, roughness: 0.8 }));
+    const ground = new THREE.Mesh(groundGeo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9 }));
     ground.rotation.x = -Math.PI/2;
     ground.receiveShadow = true;
     scene.add(ground);
 
-    // Fuel Instancing
-    const mesh = new THREE.InstancedMesh(new THREE.DodecahedronGeometry(2,0).translate(0, 1, 0), new THREE.MeshStandardMaterial({ flatShading: true }), CONFIG.count);
-    mesh.castShadow = true;
-    scene.add(mesh);
+    const fuelGeo = new THREE.DodecahedronGeometry(2, 0); 
+    fuelGeo.translate(0, 1.5, 0);
+    const mesh = new THREE.InstancedMesh(fuelGeo, new THREE.MeshStandardMaterial({ color: 0xffffff, flatShading: true }), CONFIG.count);
+    mesh.castShadow = true; scene.add(mesh);
 
-    // Chinook Model Creation
+    const arrowHelper = new THREE.ArrowHelper(new THREE.Vector3(0,0,-1), new THREE.Vector3(0,350,0), 100, 0xd32f2f);
+    scene.add(arrowHelper);
+
+    // --- CHINOOK MODEL ---
     const chinook = new THREE.Group();
-    const body = new THREE.Mesh(new THREE.BoxGeometry(8, 7, 30), new THREE.MeshStandardMaterial({color: 0x445544}));
-    const cockpit = new THREE.Mesh(new THREE.BoxGeometry(6, 5, 6), new THREE.MeshStandardMaterial({color: 0x111111}));
-    cockpit.position.z = 16;
-    chinook.add(body, cockpit);
-
-    const r1 = new THREE.Mesh(new THREE.BoxGeometry(45, 0.2, 2), new THREE.MeshStandardMaterial({color: 0x111111}));
+    const body = new THREE.Mesh(new THREE.BoxGeometry(10, 8, 32), new THREE.MeshStandardMaterial({color: 0x445544}));
+    const r1 = new THREE.Mesh(new THREE.BoxGeometry(50, 0.2, 2), new THREE.MeshStandardMaterial({color: 0x111111}));
     const r2 = r1.clone();
-    r1.position.set(0, 5, 12); r2.position.set(0, 5, -12);
-    chinook.add(r1, r2);
-    chinook.position.set(-1500, 400, -1500); // Start off-screen
+    r1.position.set(0, 6, 13); r2.position.set(0, 6, -13);
+    chinook.add(body, r1, r2);
+    chinook.position.set(-1500, 400, -1500); 
     scene.add(chinook);
 
-    // Suppression Particles
-    const waterPart = new THREE.Points(
+    const waterParticles = new THREE.Points(
         new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(new Float32Array(300), 3)),
         new THREE.PointsMaterial({color: 0x4da6ff, size: 4, transparent: true, opacity: 0.7})
     );
-    waterPart.visible = false;
-    scene.add(waterPart);
+    waterParticles.visible = false;
+    scene.add(waterParticles);
 
+    const _mat = new THREE.Matrix4(), _vpos = new THREE.Vector3(), _vscale = new THREE.Vector3(), _vquat = new THREE.Quaternion(), _vcol = new THREE.Color();
     let windVec = { x: 0, z: -1 }, windSpeed = 25, baseMoisture = 15;
-    const _mat = new THREE.Matrix4(), _vpos = new THREE.Vector3(), _vscale = new THREE.Vector3(), _vquat = new THREE.Quaternion();
 
-    function initSim() {
+    function init() {
+        acresBurned = 0; simMinutes = 600;
         document.getElementById('loading').style.display = 'flex';
-        acresBurned = 0;
-        spatialMap = new Array(mapDim*mapDim).fill(0).map(()=>[]);
-
-        for(let i=0; i<CONFIG.count; i++) {
-            const idx = i * STRIDE;
-            const x = (Math.random()-0.5) * CONFIG.worldSize;
-            const z = (Math.random()-0.5) * CONFIG.worldSize;
-            const y = getElevation(x, z), type = getFuelType(x, z);
-            
-            data[idx] = x; data[idx+1] = z; data[idx+2] = S_LIVE; data[idx+3] = baseMoisture * 10;
-            data[idx+4] = (2000 * FUEL_PROPS[type].burn) * (0.8 + Math.random()*0.4); 
-            data[idx+6] = y; data[idx+7] = type;
-
-            if (isRiver(x,z)) { data[idx+2] = S_CUT; _mat.makeScale(0,0,0); }
-            else {
+        setTimeout(() => {
+            spatialMap = new Array(mapDim*mapDim).fill(0).map(()=>[]);
+            for(let i=0; i<CONFIG.count; i++) {
+                const idx = i * STRIDE;
+                const x = (Math.random()-0.5) * CONFIG.worldSize;
+                const z = (Math.random()-0.5) * CONFIG.worldSize;
+                if (isRiver(x, z) || isRoadNS(x, z) || isRoadEW(z) || isUrban(x, z)) {
+                    data[idx+6] = -100; data[idx+2] = S_CHARRED;
+                    _mat.makeScale(0,0,0); mesh.setMatrixAt(i, _mat); continue;
+                }
+                const y = getElevation(x, z), type = getFuelType(x, z), props = FUEL_PROPS[type];
+                data[idx] = x; data[idx+1] = z; data[idx+2] = S_LIVE; data[idx+3] = baseMoisture * 10;
+                data[idx+4] = (3000 * props.burn) * (0.8 + Math.random()*0.4); data[idx+6] = y; data[idx+7] = type;
                 _vpos.set(x, y, z);
-                _vscale.set(1.2, FUEL_PROPS[type].scaleY, 1.2);
-                _mat.compose(_vpos, new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0), Math.random()*6), _vscale);
-                mesh.setColorAt(i, new THREE.Color(FUEL_PROPS[type].col));
+                _vscale.set(props.scaleXZ * (0.8 + Math.random()*0.4), props.scaleY * (0.8 + Math.random()*0.4), props.scaleXZ * (0.8 + Math.random()*0.4));
+                _vquat.setFromAxisAngle(new THREE.Vector3(0,1,0), Math.random()*Math.PI*2);
+                _mat.compose(_vpos, _vquat, _vscale);
+                mesh.setMatrixAt(i, _mat); mesh.setColorAt(i, new THREE.Color(props.col));
             }
-            mesh.setMatrixAt(i, _mat);
-        }
-        mesh.instanceMatrix.needsUpdate = true;
-        mesh.instanceColor.needsUpdate = true;
-        document.getElementById('loading').style.display = 'none';
+            mesh.instanceMatrix.needsUpdate = true; mesh.instanceColor.needsUpdate = true;
+            document.getElementById('loading').style.display = 'none';
+        }, 100);
     }
 
-    function runSuppression() {
-        r1.rotation.y += 0.7; r2.rotation.y += 0.7;
+    function runHeli() {
+        r1.rotation.y += 0.6; r2.rotation.y += 0.6;
         const home = new THREE.Vector3(-1500, 400, -1500);
-
         if (heliState.phase === 'approach') {
             chinook.lookAt(heliState.target);
-            chinook.position.lerp(heliState.target, 0.02);
-            if (chinook.position.distanceTo(heliState.target) < 20) {
-                heliState.phase = 'dropping';
-                heliState.dropTimer = 120;
-                waterPart.visible = true;
+            chinook.position.lerp(heliState.target, 0.025);
+            if (chinook.position.distanceTo(heliState.target) < 30) {
+                heliState.phase = 'dropping'; heliState.dropTimer = 120; waterParticles.visible = true;
             }
         } else if (heliState.phase === 'dropping') {
             heliState.dropTimer--;
-            // Suppression logic: hit fuel near heli
+            const p = waterParticles.geometry.attributes.position;
+            for(let i=0; i<100; i++) p.setXYZ(i, chinook.position.x+(Math.random()-0.5)*40, chinook.position.y - (Math.random()*300), chinook.position.z+(Math.random()-0.5)*40);
+            p.needsUpdate = true;
+            
+            // Suppression logic
             for(let i=0; i<CONFIG.count; i++) {
                 const idx = i*STRIDE;
-                const d2 = Math.pow(data[idx]-chinook.position.x, 2) + Math.pow(data[idx+1]-chinook.position.z, 2);
-                if (d2 < 2500) {
-                    data[idx+3] += 8.0; // Rapidly cool down
-                    if (data[idx+3] > 60 && (data[idx+2] === S_BURNING || data[idx+2] === S_DRYING)) {
-                        data[idx+2] = S_LIVE;
-                        mesh.setColorAt(i, new THREE.Color(FUEL_PROPS[data[idx+7]].col));
-                        mesh.instanceColor.needsUpdate = true;
+                if(Math.pow(data[idx]-chinook.position.x, 2) + Math.pow(data[idx+1]-chinook.position.z, 2) < 2000) {
+                    data[idx+3] += 10; // Instantly adds moisture
+                    if (data[idx+3] > 80 && (data[idx+2] === S_BURNING || data[idx+2] === S_DRYING)) {
+                        data[idx+2] = S_LIVE; mesh.setColorAt(i, new THREE.Color(FUEL_PROPS[data[idx+7]].col));
                     }
                 }
             }
-            // Particle effect
-            const p = waterPart.geometry.attributes.position;
-            for(let i=0; i<100; i++) {
-                p.setXYZ(i, chinook.position.x + (Math.random()-0.5)*30, chinook.position.y - (Math.random()*200), chinook.position.z + (Math.random()-0.5)*30);
-            }
-            p.needsUpdate = true;
-            if (heliState.dropTimer <= 0) { heliState.phase = 'returning'; waterPart.visible = false; }
+            mesh.instanceColor.needsUpdate = true;
+            if (heliState.dropTimer <= 0) { heliState.phase = 'returning'; waterParticles.visible = false; }
         } else if (heliState.phase === 'returning') {
             chinook.lookAt(home);
-            chinook.position.lerp(home, 0.015);
+            chinook.position.lerp(home, 0.02);
             if (chinook.position.distanceTo(home) < 50) heliState.phase = 'idle';
         }
     }
 
-    function updateSim() {
+    function updateSun() {
+        const dayProgress = (simMinutes % 1440) / 1440;
+        const angle = dayProgress * Math.PI * 2 - Math.PI/2;
+        sun.position.set(Math.cos(angle) * 1000, Math.sin(angle) * 1000, 500);
+        const height = Math.sin(angle);
+        const skyCol = new THREE.Color();
+        if (height > 0.5) skyCol.setHex(0x0077be);
+        else if (height > 0.1) skyCol.setHex(0x87ceeb);
+        else if (height > -0.2) skyCol.setHSL(0.02, 0.8, 0.6);
+        else skyCol.setHex(0x1a1a2e);
+        scene.background = skyCol;
+    }
+
+    function updatePhysics() {
         simMinutes += (0.05 * simSpeedMultiplier);
-        runSuppression();
+        updateSun();
+        runHeli();
+        
+        // Time Display
+        const h = Math.floor(simMinutes / 60) % 24;
+        const m = Math.floor(simMinutes % 60);
+        document.getElementById('timeDisplay').textContent = `${h % 12 || 12}:${m.toString().padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`;
+        document.getElementById('acresDisplay').textContent = acresBurned.toFixed(1);
 
-        // Skybox / Day Cycle
-        const dayP = (simMinutes % 1440) / 1440;
-        const angle = dayP * Math.PI * 2 - Math.PI/2;
-        sun.position.set(Math.cos(angle)*1000, Math.sin(angle)*1000, 300);
-        const skyH = Math.sin(angle);
-        const skyC = new THREE.Color();
-        if(skyH > 0.1) skyC.setHex(0x87ceeb); else if(skyH > -0.2) skyC.setHSL(0.02, 0.8, 0.6); else skyC.setHex(0x1a1a2e);
-        scene.background = skyC;
-
-        // Spread Logic
         for(let i=0; i<spatialMap.length; i++) spatialMap[i].length = 0;
-        let activeFires = 0;
         for(let i=0; i<CONFIG.count; i++) {
-            if(data[i*STRIDE+2] === S_BURNING) {
-                activeFires++;
-                const gx = Math.floor((data[i*STRIDE]+mapOffset)/CONFIG.cellSize);
-                const gz = Math.floor((data[i*STRIDE+1]+mapOffset)/CONFIG.cellSize);
-                if(gx>=0 && gx<mapDim && gz>=0 && gz<mapDim) spatialMap[gz*mapDim+gx].push(i);
+            if(data[i*STRIDE + 2] === S_BURNING) {
+                const gx = Math.floor((data[i*STRIDE] + mapOffset) / CONFIG.cellSize);
+                const gz = Math.floor((data[i*STRIDE+1] + mapOffset) / CONFIG.cellSize);
+                if(gx>=0 && gx<mapDim && gz>=0 && gz<mapDim) spatialMap[gz*mapDim + gx].push(i);
             }
         }
 
         let needColor = false, needMatrix = false;
         for(let i=0; i<CONFIG.count; i++) {
-            const idx = i*STRIDE, state = data[idx+2];
+            const idx = i * STRIDE, state = data[idx+2];
             if(state === S_CHARRED || state === S_CUT) continue;
-
+            
             if(state === S_BURNING) {
                 data[idx+4] -= 1.0 * simSpeedMultiplier;
                 if(data[idx+4] <= 0) {
                     data[idx+2] = S_CHARRED; acresBurned += CONFIG.acreageConstant;
                     mesh.setColorAt(i, new THREE.Color(0x111111));
                     _vpos.set(data[idx], data[idx+6], data[idx+1]);
-                    _mat.compose(_vpos, new THREE.Quaternion(), new THREE.Vector3(1,0.05,1));
+                    _vscale.set(FUEL_PROPS[data[idx+7]].scaleXZ, 0.05, FUEL_PROPS[data[idx+7]].scaleXZ);
+                    _mat.compose(_vpos, new THREE.Quaternion(0,0,0,1), _vscale);
                     mesh.setMatrixAt(i, _mat); needColor = needMatrix = true;
-                } else if(Math.random() > 0.9) {
-                    mesh.setColorAt(i, new THREE.Color(0xff4500).lerp(new THREE.Color(0xffff00), Math.random()));
-                    needColor = true;
+                } else if(Math.random() > 0.95) {
+                    _vcol.setHSL(0.02 + Math.random()*0.05, 1.0, 0.6);
+                    mesh.setColorAt(i, _vcol); needColor = true;
                 }
             } else {
-                // Heat detection
-                const gx = Math.floor((data[idx]+mapOffset)/CONFIG.cellSize), gz = Math.floor((data[idx+1]+mapOffset)/CONFIG.cellSize);
+                const tx = data[idx], tz = data[idx+1], ty = data[idx+6];
+                const gx = Math.floor((tx + mapOffset) / CONFIG.cellSize), gz = Math.floor((tz + mapOffset) / CONFIG.cellSize);
                 let heat = 0;
-                for(let nz=gz-1; nz<=gz+1; nz++) {
-                    for(let nx=gx-1; nx<=gx+1; nx++) {
-                        if(nx>=0 && nx<mapDim && nz>=0 && nz<mapDim) {
-                            spatialMap[nz*mapDim+nx].forEach(fIdx => {
-                                const f = fIdx*STRIDE;
-                                const dx = data[idx]-data[f], dz = data[idx+1]-data[f+1], dy = data[idx+6]-data[f+6];
-                                const d2 = dx*dx + dz*dz;
-                                if(d2 < 1200) {
-                                    const d = Math.sqrt(d2), dot = (dx/d)*windVec.x + (dz/d)*windVec.z;
-                                    const wB = dot > 0 ? 1 + (dot*windSpeed*0.12) : 0.5;
-                                    const sB = dy > 0 ? 1 + (dy/d)*5 : 1;
-                                    heat += (1 - d/35) * wB * sB * FUEL_PROPS[data[idx+7]].spread * CONFIG.baseSpreadRate * simSpeedMultiplier;
-                                }
-                            });
-                        }
+                for(let nz = gz-1; nz <= gz+1; nz++) {
+                    for(let nx = gx-1; nx <= gx+1; nx++) {
+                        if(nx<0 || nx>=mapDim || nz<0 || nz>=mapDim) continue;
+                        spatialMap[nz*mapDim+nx].forEach(fIdx => {
+                            const nIdx = fIdx * STRIDE;
+                            const dx = tx-data[nIdx], dz = tz-data[nIdx+1], dy = ty-data[nIdx+6];
+                            const dSq = dx*dx + dz*dz;
+                            if(dSq < 900) {
+                                const d = Math.sqrt(dSq), dot = (dx/d)*windVec.x + (dz/d)*windVec.z;
+                                const wB = dot > 0 ? 1.0 + (dot*windSpeed*0.15) : 0.5;
+                                const sB = dy > 0 ? 1.0 + (dy/d)*6 : 1;
+                                heat += (1.0 - d/30) * wB * sB * FUEL_PROPS[data[nIdx+7]].spread * CONFIG.baseSpreadRate * simSpeedMultiplier;
+                            }
+                        });
                     }
                 }
                 if(heat > 0) {
                     data[idx+3] -= heat * CONFIG.dryingRate;
-                    if(state === S_LIVE && data[idx+3] < baseMoisture*5) { data[idx+2] = S_DRYING; mesh.setColorAt(i, new THREE.Color(0xb8860b)); needColor = true; }
-                    if(data[idx+3] <= 0) { data[idx+2] = S_BURNING; mesh.setColorAt(i, new THREE.Color(0xff4500)); needColor = true; }
+                    if(state === S_LIVE && data[idx+3] < baseMoisture * 5) {
+                        data[idx+2] = S_DRYING; mesh.setColorAt(i, new THREE.Color(0xb8860b)); needColor = true;
+                    }
+                    if(data[idx+3] <= 0) {
+                        data[idx+2] = S_BURNING; mesh.setColorAt(i, new THREE.Color(0xff4500)); needColor = true;
+                    }
                 }
             }
         }
         if(needColor) mesh.instanceColor.needsUpdate = true;
         if(needMatrix) mesh.instanceMatrix.needsUpdate = true;
-        
-        // Update Displays
-        const h = Math.floor(simMinutes/60)%24;
-        document.getElementById('timeDisplay').textContent = `${h%12||12}:${(simMinutes%60).toFixed(0).padStart(2,'0')} ${h>=12?'PM':'AM'}`;
-        document.getElementById('acresDisplay').textContent = acresBurned.toFixed(1);
     }
 
-    // Input Handling
     const raycaster = new THREE.Raycaster(), mouse = new THREE.Vector2();
     window.addEventListener('mousedown', e => {
-        if(e.target.tagName !== 'CANVAS') return;
+        if(e.target.tagName !== 'CANVAS' || !currentTool) return;
         mouse.x = (e.clientX/window.innerWidth)*2-1; mouse.y = -(e.clientY/window.innerHeight)*2+1;
         raycaster.setFromCamera(mouse, camera);
-        const hit = raycaster.intersectObject(ground);
-        if(hit.length > 0) {
-            const p = hit[0].point;
-            if (currentTool === 'water' && heliState.phase === 'idle') {
-                heliState.target.set(p.x, 200, p.z); heliState.phase = 'approach';
-            } else if (currentTool === 'ignite') {
+        const hits = raycaster.intersectObject(ground);
+        if(hits.length > 0) {
+            const pt = hits[0].point;
+            if(currentTool === 'water' && heliState.phase === 'idle') {
+                heliState.target.set(pt.x, 220, pt.z); heliState.phase = 'approach';
+            } else if(currentTool === 'ignite') {
                 for(let i=0; i<CONFIG.count; i++) {
-                    const idx = i*STRIDE;
-                    if(Math.pow(data[idx]-p.x, 2) + Math.pow(data[idx+1]-p.z, 2) < 400) { data[idx+2] = S_BURNING; data[idx+3] = 0; }
+                    if(Math.pow(data[i*STRIDE]-pt.x, 2) + Math.pow(data[i*STRIDE+1]-pt.z, 2) < 100) {
+                        data[i*STRIDE+2] = S_BURNING; data[i*STRIDE+3] = 0;
+                    }
                 }
-            } else if (currentTool === 'cut') {
+            } else if(currentTool === 'cut') {
                 for(let i=0; i<CONFIG.count; i++) {
-                    const idx = i*STRIDE;
-                    if(Math.pow(data[idx]-p.x, 2) + Math.pow(data[idx+1]-p.z, 2) < 200) { data[idx+2] = S_CUT; _mat.makeScale(0,0,0); mesh.setMatrixAt(i, _mat); }
+                    if(Math.pow(data[i*STRIDE]-pt.x, 2) + Math.pow(data[i*STRIDE+1]-pt.z, 2) < 60) {
+                        data[i*STRIDE+2] = S_CUT; _mat.makeScale(0,0,0); mesh.setMatrixAt(i, _mat);
+                    }
                 }
                 mesh.instanceMatrix.needsUpdate = true;
             }
         }
     });
 
-    // UI Listeners
-    document.getElementById('startAppBtn').onclick = () => document.getElementById('splashScreen').style.opacity = 0;
+    document.getElementById('startAppBtn').onclick = () => {
+        document.getElementById('splashScreen').style.opacity = '0';
+        setTimeout(() => document.getElementById('splashScreen').style.display = 'none', 800);
+    };
+
     document.getElementById('toolIgnite').onclick = function() { currentTool = 'ignite'; updateTools(this); };
     document.getElementById('toolCut').onclick = function() { currentTool = 'cut'; updateTools(this); };
     document.getElementById('toolWater').onclick = function() { currentTool = 'water'; updateTools(this); };
-    
     function updateTools(el) {
         document.querySelectorAll('.tool').forEach(t => t.classList.remove('active'));
         el.classList.add('active');
     }
 
-    const updateControls = () => {
-        const d = document.getElementById('windDir').value, s = document.getElementById('windSpeed').value, m = document.getElementById('moisture').value;
-        simSpeedMultiplier = document.getElementById('simSpeed').value;
-        document.getElementById('windDirVal').textContent = d + '°';
-        document.getElementById('windSpeedVal').textContent = s;
-        document.getElementById('moistureVal').textContent = m + '%';
-        document.getElementById('simSpeedVal').textContent = parseFloat(simSpeedMultiplier).toFixed(1) + 'x';
-        windVec.x = Math.sin(d*(Math.PI/180)); windVec.z = -Math.cos(d*(Math.PI/180));
-        windSpeed = s; baseMoisture = m;
-    };
+    document.getElementById('resetBtn').onclick = init;
+    document.getElementById('mainHelpBtn').onclick = () => document.getElementById('mainHelpModal').style.display = 'flex';
+    document.getElementById('closeMainHelp').onclick = () => document.getElementById('mainHelpModal').style.display = 'none';
+    document.getElementById('infoBtn').onclick = () => document.getElementById('moistureModal').style.display = 'flex';
+    document.getElementById('closeMoistModal').onclick = () => document.getElementById('moistureModal').style.display = 'none';
 
-    document.querySelectorAll('input').forEach(i => i.oninput = updateControls);
-    document.getElementById('resetBtn').onclick = initSim;
     window.onresize = () => { camera.aspect = window.innerWidth/window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); };
-
-    initSim(); updateControls();
-    function animate() { requestAnimationFrame(animate); updateSim(); controls.update(); renderer.render(scene, camera); }
+    
+    init();
+    const compassSvg = document.getElementById('compassSvg');
+    function animate() {
+        requestAnimationFrame(animate); 
+        updatePhysics(); 
+        controls.update(); 
+        compassSvg.style.transform = `rotate(${controls.getAzimuthalAngle()}rad)`;
+        renderer.render(scene, camera); 
+    }
     animate();
 </script>
 </body>
