@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>DFRP Wildfire Simulator v1.5 - Urban Expansion</title>
+    <title>DFRP Wildfire Simulator v1.5 - Day/Night Cycle</title>
     <style>
         body { margin: 0; overflow: hidden; background: #eef0f5; font-family: 'Segoe UI', sans-serif; }
         
@@ -153,14 +153,14 @@
     <div id="splashOverlay"></div>
     <div class="splash-content">
         <h1>DFRP WILDFIRE SIM</h1>
-        <p>Real-time WebGL Physics Simulation v1.5 [Urban Crossroad Update]</p>
+        <p>Real-time WebGL Physics Simulation v1.5 [Daylight/Acres Update]</p>
         <button id="startAppBtn">Start Simulation</button>
     </div>
 </div>
 
 <div id="loading">
     <div>Generating Environment...</div>
-    <div style="font-size: 14px; margin-top: 10px;">100,000 Fuel Nodes + Urban Center</div>
+    <div style="font-size: 14px; margin-top: 10px;">Syncing Sun Position + Loading Tape</div>
 </div>
 
 <div id="mainHelpModal" class="modal-overlay">
@@ -171,10 +171,10 @@
         <div class="key-instruction"><span class="key-icon">Left Click + Drag</span> Rotate Camera</div>
         <div class="key-instruction"><span class="key-icon">Right Click + Drag</span> Pan Camera</div>
         <div class="key-instruction"><span class="key-icon">Scroll Wheel</span> Zoom In / Out</div>
-        <div class="key-instruction"><span class="key-icon">Tool: 🔥</span> Start a fire on fuel nodes.</div>
+        <div class="key-instruction"><span class="key-icon">Tool: 🔥</span> Start a fire manually.</div>
         <div class="key-instruction"><span class="key-icon">Tool: 🪓</span> Clear vegetation for a firebreak.</div>
-        <h4>🏙️ Urban Dynamics</h4>
-        <p>The urban center at the crossroads acts as a <strong>Permanent Firebreak</strong>. Concrete and structures do not contain fuel and will stop surface spread.</p>
+        <h4>🏙️ Dynamics</h4>
+        <p>Sunlight automatically tracks the in-game clock. Late afternoon lighting increases visibility of active fire glows.</p>
     </div>
 </div>
 
@@ -251,7 +251,7 @@
     const CONFIG = {
         count: 100000, worldSize: 1500, cellSize: 20,
         baseSpreadRate: 0.05, dryingRate: 0.07,
-        acreageConstant: 0.012 // Scale factor to turn fuel nodes into visible acreage
+        acreageConstant: 0.012 
     };
 
     const S_LIVE = 0, S_DRYING = 1, S_BURNING = 2, S_CHARRED = 3, S_CUT = 4;
@@ -267,7 +267,7 @@
     let simSpeedMultiplier = 1.0;
     let spatialMap = [];
     let acresBurned = 0;
-    let simMinutes = 600; // Start at 10:00 AM
+    let simMinutes = 600; // 10:00 AM start
     const mapDim = Math.ceil(CONFIG.worldSize / CONFIG.cellSize) + 2;
     const mapOffset = CONFIG.worldSize / 2;
     const STRIDE = 8;
@@ -280,23 +280,11 @@
     function isUrban(x, z) { return Math.abs(x - 300) < 80 && Math.abs(z - 150) < 80; }
     function getFuelType(x, z) {
         const n = Math.sin(x*0.003) + Math.cos(z*0.003); 
-        if (n > 0.8) return F_TIMBER; 
-        if (n < -0.5) return F_GRASS; 
-        return F_BRUSH; 
+        return n > 0.8 ? F_TIMBER : (n < -0.5 ? F_GRASS : F_BRUSH);
     }
 
     const scene = new THREE.Scene();
-    
-    // --- SKYBOX ---
     scene.background = new THREE.Color(0x87ceeb);
-    const canvas = document.createElement('canvas');
-    canvas.width = 1; canvas.height = 2;
-    const ctx = canvas.getContext('2d');
-    const grad = ctx.createLinearGradient(0, 0, 0, 2);
-    grad.addColorStop(0, '#1e4877'); grad.addColorStop(1, '#4584b4');
-    ctx.fillStyle = grad; ctx.fillRect(0, 0, 1, 2);
-    const bgTex = new THREE.CanvasTexture(canvas);
-    scene.background = bgTex;
 
     const camera = new THREE.PerspectiveCamera(35, window.innerWidth/window.innerHeight, 0.1, 15000);
     camera.position.set(-600, 450, 1100);
@@ -310,12 +298,15 @@
     controls.enableDamping = true;
     controls.maxPolarAngle = Math.PI / 2 - 0.1;
 
-    const sun = new THREE.DirectionalLight(0xffaa33, 1.4);
-    sun.position.set(400, 700, 300);
+    // --- LIGHTING ---
+    const sun = new THREE.DirectionalLight(0xffffff, 1.4);
     sun.castShadow = true;
     sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.camera.left = -1000; sun.shadow.camera.right = 1000;
+    sun.shadow.camera.top = 1000; sun.shadow.camera.bottom = -1000;
     scene.add(sun);
-    scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 0.7));
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.7);
+    scene.add(hemiLight);
 
     const groundGeo = new THREE.PlaneGeometry(1800, 1800, 200, 200);
     const gCount = groundGeo.attributes.position.count;
@@ -362,7 +353,6 @@
     function init() {
         acresBurned = 0;
         simMinutes = 600;
-        updateToolbarData();
         document.getElementById('loading').style.display = 'flex';
         setTimeout(() => {
             let bCount = 0;
@@ -398,55 +388,52 @@
                 _mat.compose(_vpos, _vquat, _vscale);
                 mesh.setMatrixAt(i, _mat); mesh.setColorAt(i, new THREE.Color(props.col));
             }
+            
+            // --- LOADED TAPE: PRE-LOAD IGNITION ON OPENING ---
+            for(let i=0; i<CONFIG.count; i++) {
+                const idx = i * STRIDE;
+                if(data[idx+6] > -50 && Math.pow(data[idx]-(-200), 2) + Math.pow(data[idx+1]-(-200), 2) < 2000) {
+                    data[idx+2] = S_BURNING; data[idx+3] = 0;
+                }
+            }
+            
             mesh.instanceMatrix.needsUpdate = true; mesh.instanceColor.needsUpdate = true;
             document.getElementById('loading').style.display = 'none';
         }, 100);
     }
 
-    const raycaster = new THREE.Raycaster(), mouse = new THREE.Vector2();
-    let isDragging = false;
-    window.addEventListener('mousedown', e => { if(e.target.tagName === 'CANVAS' && currentTool) { isDragging = true; handleInput(e); }});
-    window.addEventListener('mousemove', e => { if(isDragging) handleInput(e); });
-    window.addEventListener('mouseup', () => isDragging = false);
-
-    function handleInput(e) {
-        mouse.x = (e.clientX/window.innerWidth)*2-1; mouse.y = -(e.clientY/window.innerHeight)*2+1;
-        raycaster.setFromCamera(mouse, camera);
-        const hits = raycaster.intersectObject(ground);
-        if(hits.length > 0) {
-            const pt = hits[0].point;
-            if(currentTool === 'ignite') {
-                for(let i=0; i<CONFIG.count; i++) {
-                    const idx = i*STRIDE; if(data[idx+6] < -50) continue;
-                    if(Math.pow(data[idx]-pt.x, 2) + Math.pow(data[idx+1]-pt.z, 2) < 900) { data[idx+2] = S_BURNING; data[idx+3] = 0; }
-                }
-            } else if(currentTool === 'cut') {
-                for(let i=0; i<CONFIG.count; i++) {
-                    const idx = i*STRIDE; if(data[idx+6] < -50) continue;
-                    if(Math.pow(data[idx]-pt.x, 2) + Math.pow(data[idx+1]-pt.z, 2) < 60) {
-                        data[idx+2] = S_CUT; _mat.makeScale(0,0,0); mesh.setMatrixAt(i, _mat);
-                    }
-                }
-                mesh.instanceMatrix.needsUpdate = true;
-            }
-        }
+    function updateSun() {
+        // Map 24h cycle to sun position
+        const dayProgress = (simMinutes % 1440) / 1440;
+        const angle = dayProgress * Math.PI * 2 - Math.PI/2;
+        
+        sun.position.set(Math.cos(angle) * 1000, Math.sin(angle) * 1000, 500);
+        
+        // Intensity/Color based on height
+        const height = Math.sin(angle);
+        sun.intensity = Math.max(0, height * 1.5);
+        hemiLight.intensity = Math.max(0.1, height * 0.8 + 0.2);
+        
+        // Sky Color
+        const skyCol = new THREE.Color();
+        if(height > 0.2) skyCol.setHex(0x87ceeb); // Day
+        else if(height > -0.1) skyCol.setHSL(0.05, 0.7, 0.5); // Sunset
+        else skyCol.setHex(0x050510); // Night
+        scene.background = skyCol;
     }
 
     function updateToolbarData() {
-        // Time logic
         const hours = Math.floor(simMinutes / 60) % 24;
         const mins = Math.floor(simMinutes % 60);
         const ampm = hours >= 12 ? 'PM' : 'AM';
         const displayHours = hours % 12 || 12;
         document.getElementById('timeDisplay').textContent = `${displayHours}:${mins < 10 ? '0' : ''}${mins} ${ampm}`;
-        
-        // Acreage logic
         document.getElementById('acresDisplay').textContent = acresBurned.toLocaleString(undefined, {minimumFractionDigits: 1, maximumFractionDigits: 1});
     }
 
     function updatePhysics() {
-        // Time progression
         simMinutes += (0.05 * simSpeedMultiplier);
+        updateSun();
         updateToolbarData();
 
         for(let i=0; i<spatialMap.length; i++) spatialMap[i].length = 0;
@@ -470,18 +457,19 @@
                 data[idx+4] -= 1.0 * simSpeedMultiplier;
                 if(data[idx+4] <= 0) {
                     data[idx+2] = S_CHARRED; 
-                    acresBurned += CONFIG.acreageConstant; // Node is officially "burned"
+                    acresBurned += CONFIG.acreageConstant;
                     mesh.setColorAt(i, new THREE.Color(0x111111));
                     _vpos.set(data[idx], data[idx+6], data[idx+1]);
                     _vscale.set(FUEL_PROPS[data[idx+7]].scaleXZ, 0.05, FUEL_PROPS[data[idx+7]].scaleXZ);
                     _mat.compose(_vpos, new THREE.Quaternion(0,0,0,1), _vscale);
                     mesh.setMatrixAt(i, _mat); needColor = true; needMatrix = true;
                 } else if(Math.random() > 0.95) {
-                    _vcol.setHSL(0.05 + Math.random()*0.05, 1.0, (0.5 + Math.random()*0.5) * 0.6);
+                    _vcol.setHSL(0.02 + Math.random()*0.05, 1.0, 0.6);
                     mesh.setColorAt(i, _vcol); needColor = true;
                 }
                 continue;
             }
+            // Spread Logic
             const tx = data[idx], tz = data[idx+1], ty = data[idx+6];
             const gx = Math.floor((tx + mapOffset) / CONFIG.cellSize), gz = Math.floor((tz + mapOffset) / CONFIG.cellSize);
             let hasFire = false;
@@ -521,6 +509,35 @@
         }
         if(needColor) mesh.instanceColor.needsUpdate = true;
         if(needMatrix) mesh.instanceMatrix.needsUpdate = true;
+    }
+
+    const raycaster = new THREE.Raycaster(), mouse = new THREE.Vector2();
+    let isDragging = false;
+    window.addEventListener('mousedown', e => { if(e.target.tagName === 'CANVAS' && currentTool) { isDragging = true; handleInput(e); }});
+    window.addEventListener('mousemove', e => { if(isDragging) handleInput(e); });
+    window.addEventListener('mouseup', () => isDragging = false);
+
+    function handleInput(e) {
+        mouse.x = (e.clientX/window.innerWidth)*2-1; mouse.y = -(e.clientY/window.innerHeight)*2+1;
+        raycaster.setFromCamera(mouse, camera);
+        const hits = raycaster.intersectObject(ground);
+        if(hits.length > 0) {
+            const pt = hits[0].point;
+            if(currentTool === 'ignite') {
+                for(let i=0; i<CONFIG.count; i++) {
+                    const idx = i*STRIDE; if(data[idx+6] < -50) continue;
+                    if(Math.pow(data[idx]-pt.x, 2) + Math.pow(data[idx+1]-pt.z, 2) < 900) { data[idx+2] = S_BURNING; data[idx+3] = 0; }
+                }
+            } else if(currentTool === 'cut') {
+                for(let i=0; i<CONFIG.count; i++) {
+                    const idx = i*STRIDE; if(data[idx+6] < -50) continue;
+                    if(Math.pow(data[idx]-pt.x, 2) + Math.pow(data[idx+1]-pt.z, 2) < 60) {
+                        data[idx+2] = S_CUT; _mat.makeScale(0,0,0); mesh.setMatrixAt(i, _mat);
+                    }
+                }
+                mesh.instanceMatrix.needsUpdate = true;
+            }
+        }
     }
 
     function updateInputs() {
