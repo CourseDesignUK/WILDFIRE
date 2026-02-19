@@ -160,7 +160,7 @@
 
 <div id="loading">
     <div>Generating Environment...</div>
-    <div style="font-size: 14px; margin-top: 10px;">Syncing Sun Position + Loading Tape</div>
+    <div style="font-size: 14px; margin-top: 10px;">Syncing Sun Position...</div>
 </div>
 
 <div id="mainHelpModal" class="modal-overlay">
@@ -389,13 +389,7 @@
                 mesh.setMatrixAt(i, _mat); mesh.setColorAt(i, new THREE.Color(props.col));
             }
             
-            // --- LOADED TAPE: PRE-LOAD IGNITION ON OPENING ---
-            for(let i=0; i<CONFIG.count; i++) {
-                const idx = i * STRIDE;
-                if(data[idx+6] > -50 && Math.pow(data[idx]-(-200), 2) + Math.pow(data[idx+1]-(-200), 2) < 2000) {
-                    data[idx+2] = S_BURNING; data[idx+3] = 0;
-                }
-            }
+            // --- AUTOMATIC IGNITION REMOVED ---
             
             mesh.instanceMatrix.needsUpdate = true; mesh.instanceColor.needsUpdate = true;
             document.getElementById('loading').style.display = 'none';
@@ -403,22 +397,16 @@
     }
 
     function updateSun() {
-        // Map 24h cycle to sun position
         const dayProgress = (simMinutes % 1440) / 1440;
         const angle = dayProgress * Math.PI * 2 - Math.PI/2;
-        
         sun.position.set(Math.cos(angle) * 1000, Math.sin(angle) * 1000, 500);
-        
-        // Intensity/Color based on height
         const height = Math.sin(angle);
         sun.intensity = Math.max(0, height * 1.5);
         hemiLight.intensity = Math.max(0.1, height * 0.8 + 0.2);
-        
-        // Sky Color
         const skyCol = new THREE.Color();
-        if(height > 0.2) skyCol.setHex(0x87ceeb); // Day
-        else if(height > -0.1) skyCol.setHSL(0.05, 0.7, 0.5); // Sunset
-        else skyCol.setHex(0x050510); // Night
+        if(height > 0.2) skyCol.setHex(0x87ceeb);
+        else if(height > -0.1) skyCol.setHSL(0.05, 0.7, 0.5);
+        else skyCol.setHex(0x050510);
         scene.background = skyCol;
     }
 
@@ -469,7 +457,6 @@
                 }
                 continue;
             }
-            // Spread Logic
             const tx = data[idx], tz = data[idx+1], ty = data[idx+6];
             const gx = Math.floor((tx + mapOffset) / CONFIG.cellSize), gz = Math.floor((tz + mapOffset) / CONFIG.cellSize);
             let hasFire = false;
@@ -526,7 +513,8 @@
             if(currentTool === 'ignite') {
                 for(let i=0; i<CONFIG.count; i++) {
                     const idx = i*STRIDE; if(data[idx+6] < -50) continue;
-                    if(Math.pow(data[idx]-pt.x, 2) + Math.pow(data[idx+1]-pt.z, 2) < 900) { data[idx+2] = S_BURNING; data[idx+3] = 0; }
+                    // REDUCED BRUSH SIZE: 900 down to 100 for precision
+                    if(Math.pow(data[idx]-pt.x, 2) + Math.pow(data[idx+1]-pt.z, 2) < 100) { data[idx+2] = S_BURNING; data[idx+3] = 0; }
                 }
             } else if(currentTool === 'cut') {
                 for(let i=0; i<CONFIG.count; i++) {
@@ -559,7 +547,7 @@
     document.getElementById('startAppBtn').onclick = () => {
         document.getElementById('splashScreen').style.opacity = '0';
         setTimeout(() => document.getElementById('splashScreen').style.display = 'none', 800);
-        startHideTimer();
+        // UNHIDDEN TOOLBAR: startHideTimer is no longer called here to keep it visible
     };
 
     document.getElementById('infoBtn').onclick = () => document.getElementById('moistureModal').style.display = 'flex';
@@ -591,22 +579,13 @@
 
     const uiPanel = document.getElementById('ui');
     const toolbar = document.getElementById('toolbar');
-    let hideTimer;
-    function showPanels() {
-        uiPanel.classList.remove('ui-hidden'); toolbar.classList.remove('toolbar-hidden');
-        clearTimeout(hideTimer);
-    }
-    function startHideTimer() {
-        clearTimeout(hideTimer);
-        hideTimer = setTimeout(() => {
-            uiPanel.classList.add('ui-hidden'); toolbar.classList.add('toolbar-hidden');
-        }, 5000);
-    }
+    
+    // TOOLBAR PERMANENCE: Removed the automatic hide timers to keep the bottom toolbar visible.
     window.addEventListener('mousemove', (e) => {
-        if (e.clientX < 100 || e.clientY > window.innerHeight - 100) showPanels();
+        if (e.clientX < 100) uiPanel.classList.remove('ui-hidden');
     });
-    [uiPanel, toolbar].forEach(el => {
-        el.addEventListener('mouseenter', showPanels); el.addEventListener('mouseleave', startHideTimer);
+    uiPanel.addEventListener('mouseleave', () => {
+       setTimeout(() => uiPanel.classList.add('ui-hidden'), 3000);
     });
 
     const compassSvg = document.getElementById('compassSvg');
