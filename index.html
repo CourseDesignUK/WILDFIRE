@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>DFRP Wildfire Simulator v1.5 - Chinook Update</title>
+    <title>DFRP Wildfire Simulator v1.5 - Chinook Air Support</title>
     <style>
         body { margin: 0; overflow: hidden; background: #eef0f5; font-family: 'Segoe UI', sans-serif; }
         
@@ -117,15 +117,13 @@
 
     const S_LIVE = 0, S_DRYING = 1, S_BURNING = 2, S_CHARRED = 3, S_CUT = 4;
     const FUEL_PROPS = {
-        0: { spread: 2.5, burn: 0.4, scaleY: 0.15, col: 0x7cfc00 }, // Grass
-        1: { spread: 1.0, burn: 1.0, scaleY: 0.6, col: 0x556b2f },  // Brush
-        2: { spread: 0.4, burn: 3.5, scaleY: 2.2, col: 0x004d00 }   // Timber
+        0: { spread: 2.5, burn: 0.4, scaleY: 0.15, col: 0x7cfc00 }, 
+        1: { spread: 1.0, burn: 1.0, scaleY: 0.6, col: 0x556b2f },  
+        2: { spread: 0.4, burn: 3.5, scaleY: 2.2, col: 0x004d00 }   
     };
 
     let scene, camera, renderer, controls, mesh, ground, heliGroup, waterSystem;
-    let currentTool = null;
-    let acresBurned = 0;
-    let simMinutes = 600;
+    let currentTool = null, acresBurned = 0, simMinutes = 600;
     const STRIDE = 8;
     let data = new Float32Array(CONFIG.count * STRIDE);
     let windVec = { x: 0, z: -1 }, windSpeed = 25, baseMoisture = 15;
@@ -148,30 +146,29 @@
         sun.position.set(500, 1000, 500);
         scene.add(sun, new THREE.AmbientLight(0xffffff, 0.4));
 
-        // Ground
-        ground = new THREE.Mesh(new THREE.PlaneGeometry(1800, 1800, 100, 100), new THREE.MeshStandardMaterial({ color: 0x556b2f }));
+        ground = new THREE.Mesh(new THREE.PlaneGeometry(1800, 1800, 10, 10), new THREE.MeshStandardMaterial({ color: 0x556b2f }));
         ground.rotation.x = -Math.PI/2;
         scene.add(ground);
 
-        // Instanced Fuel
         mesh = new THREE.InstancedMesh(new THREE.DodecahedronGeometry(2, 0), new THREE.MeshStandardMaterial({ color: 0xffffff }), CONFIG.count);
         scene.add(mesh);
 
-        // --- CHINOOK ASSET ---
+        // --- LOAD UP CHINOOK ASSETS ON OPENING ---
         heliGroup = new THREE.Group();
-        const body = new THREE.Mesh(new THREE.BoxGeometry(15, 5, 5), new THREE.MeshStandardMaterial({color: 0x2d3436}));
-        const r1 = new THREE.Mesh(new THREE.BoxGeometry(22, 0.2, 1), new THREE.MeshStandardMaterial({color: 0x000}));
+        const body = new THREE.Mesh(new THREE.BoxGeometry(18, 5, 6), new THREE.MeshStandardMaterial({color: 0x2d3436}));
+        const rotorGeo = new THREE.BoxGeometry(25, 0.2, 1.2);
+        const r1 = new THREE.Mesh(rotorGeo, new THREE.MeshStandardMaterial({color: 0x111}));
         const r2 = r1.clone();
-        r1.position.set(-6, 3.5, 0); r2.position.set(6, 3.5, 0);
+        r1.position.set(-7, 4, 0); r2.position.set(7, 4, 0);
         heliGroup.add(body, r1, r2);
         heliGroup.rotors = [r1, r2];
         heliGroup.visible = false;
         scene.add(heliGroup);
 
-        // Water Particles
+        // Water particle buffer
         const pGeo = new THREE.BufferGeometry();
-        pGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(300 * 3), 3));
-        waterSystem = new THREE.Points(pGeo, new THREE.PointsMaterial({color: 0x00a8ff, size: 2}));
+        pGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(500 * 3), 3));
+        waterSystem = new THREE.Points(pGeo, new THREE.PointsMaterial({color: 0x00a8ff, size: 2.5, transparent: true, opacity: 0.7}));
         waterSystem.visible = false;
         scene.add(waterSystem);
     }
@@ -185,7 +182,6 @@
             data[idx] = x; data[idx+1] = z; data[idx+2] = S_LIVE; 
             data[idx+3] = baseMoisture * 10; data[idx+4] = 100 * FUEL_PROPS[type].burn;
             data[idx+6] = getElevation(x, z); data[idx+7] = type;
-            
             const mat = new THREE.Matrix4().makeTranslation(x, data[idx+6], z);
             mesh.setMatrixAt(i, mat);
             mesh.setColorAt(i, new THREE.Color(FUEL_PROPS[type].col));
@@ -199,33 +195,33 @@
         if(heliActive) return;
         heliActive = true;
         heliTarget.copy(target);
-        heliGroup.position.set(target.x - 500, 180, target.z);
+        heliGroup.position.set(target.x - 600, 200, target.z);
         heliGroup.visible = true;
     }
 
     function updateHeli() {
         if(!heliActive) return;
-        heliGroup.position.x += 4;
-        heliGroup.rotors.forEach(r => r.rotation.y += 0.4);
+        heliGroup.position.x += 6; 
+        heliGroup.rotors.forEach((r, i) => r.rotation.y += (i === 0 ? 0.5 : -0.5));
 
         const dist = Math.abs(heliGroup.position.x - heliTarget.x);
-        if(dist < 10) {
+        if(dist < 30) {
             waterSystem.visible = true;
             const pos = waterSystem.geometry.attributes.position.array;
-            for(let i=0; i<300; i++) {
-                pos[i*3] = heliGroup.position.x + (Math.random()-0.5)*20;
-                pos[i*3+1] = heliGroup.position.y - (Math.random()*40);
-                pos[i*3+2] = heliGroup.position.z + (Math.random()-0.5)*20;
+            for(let i=0; i<500; i++) {
+                pos[i*3] = heliGroup.position.x + (Math.random()-0.5)*30;
+                pos[i*3+1] = heliGroup.position.y - (Math.random()*60);
+                pos[i*3+2] = heliGroup.position.z + (Math.random()-0.5)*15;
             }
             waterSystem.geometry.attributes.position.needsUpdate = true;
             
-            // Extinguish Logic
+            // Extinguish/Dampen logic
             for(let i=0; i<CONFIG.count; i++) {
                 const idx = i*STRIDE;
                 const dSq = Math.pow(data[idx]-heliTarget.x, 2) + Math.pow(data[idx+1]-heliTarget.z, 2);
-                if(dSq < 2500) {
-                    data[idx+2] = S_LIVE; data[idx+3] = 200; // Wet
-                    mesh.setColorAt(i, new THREE.Color(0x0066cc));
+                if(dSq < 3600) { // 60m radius
+                    data[idx+2] = S_LIVE; data[idx+3] = 500; // Saturated moisture
+                    mesh.setColorAt(i, new THREE.Color(0x00a8ff));
                 }
             }
             mesh.instanceColor.needsUpdate = true;
@@ -237,25 +233,19 @@
     }
 
     function updatePhysics() {
-        simMinutes += 0.05;
-        const h = Math.floor(simMinutes/60)%24, m = Math.floor(simMinutes%60);
-        document.getElementById('timeDisplay').textContent = `${h%12||12}:${m<10?'0':''}${m} ${h>=12?'PM':'AM'}`;
+        simMinutes += 0.02;
+        document.getElementById('timeDisplay').textContent = `${Math.floor(simMinutes/60)%12||12}:${Math.floor(simMinutes%60).toString().padStart(2,'0')} ${simMinutes%1440 >= 720 ? 'PM' : 'AM'}`;
         document.getElementById('acresDisplay').textContent = acresBurned.toFixed(1);
-
+        
         for(let i=0; i<CONFIG.count; i++) {
             const idx = i*STRIDE;
             if(data[idx+2] === S_BURNING) {
-                data[idx+4] -= 0.5;
+                data[idx+4] -= 1;
                 if(data[idx+4] <= 0) {
                     data[idx+2] = S_CHARRED;
                     acresBurned += CONFIG.acreageConstant;
                     mesh.setColorAt(i, new THREE.Color(0x111111));
                     mesh.instanceColor.needsUpdate = true;
-                }
-                // Very basic spread logic for demo
-                if(Math.random() > 0.98) {
-                    const neighborIdx = Math.floor(Math.random()*CONFIG.count)*STRIDE;
-                    if(data[neighborIdx+2] === S_LIVE) data[neighborIdx+2] = S_BURNING;
                 }
             }
         }
@@ -263,6 +253,7 @@
 
     const raycaster = new THREE.Raycaster(), mouse = new THREE.Vector2();
     window.addEventListener('mousedown', e => {
+        if(e.target.tagName !== 'CANVAS') return;
         mouse.x = (e.clientX/window.innerWidth)*2-1; mouse.y = -(e.clientY/window.innerHeight)*2+1;
         raycaster.setFromCamera(mouse, camera);
         const hits = raycaster.intersectObject(ground);
@@ -277,13 +268,9 @@
         }
     });
 
-    // --- BUTTONS ---
     document.getElementById('startAppBtn').onclick = () => {
         document.getElementById('splashScreen').style.opacity = '0';
-        setTimeout(() => {
-            document.getElementById('splashScreen').style.display = 'none';
-            document.getElementById('ui').classList.remove('ui-hidden');
-        }, 800);
+        setTimeout(() => document.getElementById('splashScreen').style.display = 'none', 800);
     };
 
     document.getElementById('toolIgnite').onclick = function() {
