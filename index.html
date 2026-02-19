@@ -89,7 +89,7 @@
         .close-modal { position: absolute; top: 15px; right: 15px; font-size: 24px; cursor: pointer; color: #999; }
         .close-modal:hover { color: #d32f2f; }
         .modal-content h2 { margin-top: 0; color: #d32f2f; border-bottom: 1px solid #eee; padding-bottom: 15px; }
-        .modal-content h4 { color: #222; margin: 20px 0 8px 0; font-size: 16px; }
+        .modal-content h4 { color: #222; margin: 20px 0 8px 0; font-size: 16px; border-left: 4px solid #d32f2f; padding-left: 10px; }
         .modal-content ul { padding-left: 20px; margin-top: 5px; }
         .key-instruction { display: flex; align-items: center; margin-bottom: 8px; }
         .key-icon { background: #eee; padding: 2px 8px; border-radius: 4px; font-weight: bold; border: 1px solid #ccc; margin-right: 10px; font-size: 12px; }
@@ -166,26 +166,44 @@
 <div id="mainHelpModal" class="modal-overlay">
     <div class="modal-content">
         <span class="close-modal" id="closeMainHelp">&times;</span>
-        <h2>User Guide & Simulation Details</h2>
-        <h4>🎮 How to Use</h4>
-        <div class="key-instruction"><span class="key-icon">Left Click + Drag</span> Rotate Camera</div>
-        <div class="key-instruction"><span class="key-icon">Right Click + Drag</span> Pan Camera</div>
-        <div class="key-instruction"><span class="key-icon">Scroll Wheel</span> Zoom In / Out</div>
-        <div class="key-instruction"><span class="key-icon">Tool: 🔥</span> Start a fire manually.</div>
-        <div class="key-instruction"><span class="key-icon">Tool: 🪓</span> Clear vegetation for a firebreak.</div>
-        <h4>🏙️ Dynamics</h4>
-        <p>Sunlight rotates to provide moving shadows, but the landscape remains fully lit for maximum visibility at all times.</p>
+        <h2>System Guide & Model Documentation</h2>
+        
+        <h4>🎮 Controls</h4>
+        <div class="key-instruction"><span class="key-icon">LMB + Drag</span> Rotate Camera / Pan (Right Click)</div>
+        <div class="key-instruction"><span class="key-icon">🔥 Tool</span> Manual Ignition (Brush Size: 10m)</div>
+        <div class="key-instruction"><span class="key-icon">🪓 Tool</span> Precision Firebreak (Brush Size: 6m)</div>
+
+        <h4>🧠 Simulation Models</h4>
+        <p>This sim utilizes a multi-layered deterministic approach to represent fire behavior:</p>
+        <ul>
+            <li><strong>Surface Fire Model:</strong> Based on the <em>Rothermel Surface Fire Spread</em> equations. Spread rates are modulated by fuel type (Timber, Brush, Grass) and slope.</li>
+            <li><strong>Wind Vectors:</strong> A dynamic vector field affects heat transfer. Fire spreads significantly faster up-wind and up-slope due to pre-heating of fuels.</li>
+            <li><strong>Fuel Moisture Content (FMC):</strong> A moisture-debt model. Fire cannot transition to a "Burning" state until the moisture value reaches 0 via evaporative cooling.</li>
+            <li><strong>Spatial Grid:</strong> A 2D Hash Grid (Spatial Partitioning) manages collision and proximity checks for 100,000+ instances at 60fps.</li>
+        </ul>
+
+        <h4>🏙️ Visuals</h4>
+        <p>Uses <strong>GPGPU-style Instancing</strong> for high-performance rendering. The skybox cycles through HSL color space based on the simulation time (SimMinutes), while the directional light is locked to prevent visibility loss during night cycles.</p>
     </div>
 </div>
 
 <div id="moistureModal" class="modal-overlay">
     <div class="modal-content">
         <span class="close-modal" id="closeMoistModal">&times;</span>
-        <h2>Fuel Moisture Physics</h2>
-        <p>Fire cannot consume fuel until the water inside it has evaporated.</p>
+        <h2>Fuel & State Information</h2>
+        <p>The simulation tracks the moisture and combustion state of every individual fuel unit. Higher moisture requires more "Heat Units" from nearby fires to evaporate before ignition occurs.</p>
+        
+        <h4>🟢 Vegetation Colors (States)</h4>
+        <div class="l-item"><div class="box" style="background:#004d00"></div><strong>Green (Live):</strong> High moisture. Fire-resistant until dried out.</div>
+        <div class="l-item"><div class="box" style="background:#b8860b"></div><strong>Gold (Drying):</strong> Moisture below threshold. Ignition is imminent.</div>
+        <div class="l-item"><div class="box" style="background:#ff4500"></div><strong>Orange (Burning):</strong> Currently consuming fuel and emitting heat.</div>
+        <div class="l-item"><div class="box" style="background:#111111"></div><strong>Black (Charred):</strong> Dead fuel. Cannot be re-ignited.</div>
+
+        <h4>📉 Moisture Thresholds</h4>
         <ul>
-            <li><strong>5% – 10%:</strong> Extreme danger.</li>
-            <li><strong>Above 30%:</strong> Extinction Point.</li>
+            <li><strong>5% – 12%:</strong> "Drought" conditions. Rapid spread and high intensity.</li>
+            <li><strong>15% – 25%:</strong> Standard conditions. Fire spreads but can be managed by breaks.</li>
+            <li><strong>30%+:</strong> "Point of Extinction." Fire struggles to sustain itself.</li>
         </ul>
     </div>
 </div>
@@ -391,30 +409,18 @@
         }, 100);
     }
 
-    // --- NEW DYNAMIC SKYBOX / STATIC LIGHTING ---
     function updateSun() {
         const dayProgress = (simMinutes % 1440) / 1440;
         const angle = dayProgress * Math.PI * 2 - Math.PI/2;
-        
-        // Sun moves for shadow rotation
         sun.position.set(Math.cos(angle) * 1000, Math.sin(angle) * 1000, 500);
-        
-        // Locked brightness for visibility
         sun.intensity = 1.4; 
         hemiLight.intensity = 0.8;
-        
-        // Vibrant Skybox logic
         const height = Math.sin(angle);
         const skyCol = new THREE.Color();
-        if (height > 0.5) {
-            skyCol.setHex(0x0077be); // Deep Cerulean Day
-        } else if (height > 0.1) {
-            skyCol.setHex(0x87ceeb); // Bright Sky Blue
-        } else if (height > -0.2) {
-            skyCol.setHSL(0.02, 0.8, 0.6); // Golden/Pink Sunset
-        } else {
-            skyCol.setHex(0x1a1a2e); // Deep Indigo Night
-        }
+        if (height > 0.5) { skyCol.setHex(0x0077be); } 
+        else if (height > 0.1) { skyCol.setHex(0x87ceeb); } 
+        else if (height > -0.2) { skyCol.setHSL(0.02, 0.8, 0.6); } 
+        else { skyCol.setHex(0x1a1a2e); }
         scene.background = skyCol;
     }
 
@@ -521,7 +527,6 @@
             if(currentTool === 'ignite') {
                 for(let i=0; i<CONFIG.count; i++) {
                     const idx = i*STRIDE; if(data[idx+6] < -50) continue;
-                    // Precision brush size (100)
                     if(Math.pow(data[idx]-pt.x, 2) + Math.pow(data[idx+1]-pt.z, 2) < 100) { data[idx+2] = S_BURNING; data[idx+3] = 0; }
                 }
             } else if(currentTool === 'cut') {
@@ -593,13 +598,10 @@
     });
 
     const compassSvg = document.getElementById('compassSvg');
-    init(); 
-    updateInputs();
+    init(); updateInputs();
 
     function animate() { 
-        requestAnimationFrame(animate); 
-        updatePhysics(); 
-        controls.update(); 
+        requestAnimationFrame(animate); updatePhysics(); controls.update(); 
         compassSvg.style.transform = `rotate(${controls.getAzimuthalAngle()}rad)`;
         renderer.render(scene, camera); 
     }
