@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>DFRP Wildfire Simulator v1.6</title>
+    <title>DFRP Wildfire Simulator v1.0</title>
     <style>
         body { margin: 0; overflow: hidden; background: #eef0f5; font-family: 'Segoe UI', sans-serif; }
         
@@ -62,19 +62,14 @@
         .control { margin-bottom: 15px; }
         label { display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: #666; margin-bottom: 5px; text-transform: uppercase; font-weight: bold; }
         input[type=range] { width: 100%; cursor: pointer; accent-color: #d32f2f; }
-        
-        .map-input-group { display: flex; gap: 5px; margin-bottom: 10px; }
-        .map-input-group input[type="text"] { flex: 1; padding: 6px; font-size: 11px; border: 1px solid #ccc; border-radius: 4px; }
-        .map-input-group button { background: #333; color: white; border: none; padding: 0 12px; font-size: 11px; font-weight: bold; border-radius: 4px; cursor: pointer; text-transform: uppercase; }
-        .map-input-group button:hover { background: #d32f2f; }
-        input[type="file"] { font-size: 10px; width: 100%; padding: 4px 0; }
-
         button#resetBtn { 
-            background: #f0f0f0; color: #333; border: 1px solid #ccc; 
-            padding: 8px; width: 100%; cursor: pointer; border-radius: 4px; 
-            font-size: 11px; text-transform: uppercase; font-weight: bold; transition: 0.2s;
+            background: #d32f2f; color: white; border: none; 
+            padding: 10px; width: 100%; cursor: pointer; border-radius: 4px; 
+            font-size: 12px; text-transform: uppercase; font-weight: bold; transition: 0.2s;
+            margin-top: 10px; margin-bottom: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
         }
-        button#resetBtn:hover { background: #e0e0e0; }
+        button#resetBtn:hover { background: #b71c1c; }
         .val { color: #d32f2f; font-weight: 700; margin-left: auto; margin-right: 8px; }
         .info-trigger {
             background: #999; color: white; border-radius: 50%; width: 14px; height: 14px;
@@ -83,9 +78,15 @@
         }
         .info-trigger:hover { background: #d32f2f; }
 
-        /* ... Modal & Toolbar CSS remains unchanged ... */
-        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 2100; justify-content: center; align-items: center; padding: 20px; box-sizing: border-box; backdrop-filter: blur(4px); }
-        .modal-content { background: white; padding: 30px; border-radius: 12px; max-width: 650px; width: 100%; max-height: 85vh; overflow-y: auto; position: relative; line-height: 1.6; font-size: 14px; color: #444; }
+        .modal-overlay {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.7); z-index: 2100; justify-content: center; align-items: center;
+            padding: 20px; box-sizing: border-box; backdrop-filter: blur(4px);
+        }
+        .modal-content {
+            background: white; padding: 30px; border-radius: 12px; max-width: 650px; width: 100%;
+            max-height: 85vh; overflow-y: auto; position: relative; line-height: 1.6; font-size: 14px; color: #444;
+        }
         .close-modal { position: absolute; top: 15px; right: 15px; font-size: 24px; cursor: pointer; color: #999; }
         .close-modal:hover { color: #d32f2f; }
         .modal-content h2 { margin-top: 0; color: #d32f2f; border-bottom: 1px solid #eee; padding-bottom: 15px; }
@@ -93,182 +94,39 @@
         .modal-content ul { padding-left: 20px; margin-top: 5px; }
         .key-instruction { display: flex; align-items: center; margin-bottom: 8px; }
         .key-icon { background: #eee; padding: 2px 8px; border-radius: 4px; font-weight: bold; border: 1px solid #ccc; margin-right: 10px; font-size: 12px; }
-        .legend { margin-top: 15px; border-top: 1px solid #eee; padding-top: 10px; font-size: 11px; }
+
+        .legend { margin-top: 10px; border-top: 1px solid #eee; padding-top: 10px; font-size: 11px; }
         .l-item { display: flex; align-items: center; margin-bottom: 4px; }
         .box { width: 10px; height: 10px; margin-right: 8px; border-radius: 2px; }
 
-        #toolbar { position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); display: flex; gap: 20px; background: white; padding: 12px 25px; border-radius: 50px; box-shadow: 0 5px 20px rgba(0,0,0,0.2); z-index: 100; align-items: center; transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.5s ease; }
+        /* --- TOOLBAR STYLES --- */
+        #toolbar {
+            position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
+            display: flex; gap: 20px; background: white; padding: 12px 25px;
+            border-radius: 50px; box-shadow: 0 5px 20px rgba(0,0,0,0.2);
+            z-index: 100; align-items: center;
+            transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.5s ease;
+        }
         .toolbar-hidden { transform: translate(-50%, 120px) !important; opacity: 0; }
-        .tool { width: 54px; height: 54px; border-radius: 50%; border: 2px solid #eee; background: white; cursor: pointer; font-size: 24px; display: flex; align-items: center; justify-content: center; transition: 0.2s; }
+
+        .tool {
+            width: 54px; height: 54px; border-radius: 50%; border: 2px solid #eee;
+            background: white; cursor: pointer; font-size: 24px; display: flex;
+            align-items: center; justify-content: center; transition: 0.2s;
+        }
         .tool:hover { transform: scale(1.1); background: #f9f9f9; }
         .tool.active { border-color: #d32f2f; background: #fff0f0; transform: scale(1.15); box-shadow: 0 0 15px rgba(211, 47, 47, 0.4); }
-        .data-readout { display: flex; flex-direction: column; align-items: center; min-width: 80px; border-left: 1px solid #eee; border-right: 1px solid #eee; padding: 0 15px; }
+
+        .data-readout {
+            display: flex; flex-direction: column; align-items: center;
+            min-width: 80px; border-left: 1px solid #eee; border-right: 1px solid #eee;
+            padding: 0 15px;
+        }
         .data-label { font-size: 9px; text-transform: uppercase; color: #999; font-weight: 800; letter-spacing: 0.5px; }
         .data-val { font-size: 16px; font-weight: 700; color: #333; font-variant-numeric: tabular-nums; }
-        #compass { width: 54px; height: 54px; border-radius: 50%; background: #222; border: 2px solid #444; display: flex; align-items: center; justify-content: center; box-shadow: inset 0 0 10px rgba(0,0,0,0.5); }
-        #compassSvg { width: 100%; height: 100%; will-change: transform; }
-        #loading { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #eef0f5; display: flex; flex-direction: column; justify-content: center; align-items: center; font-size: 24px; color: #555; z-index: 999; }
-    </style>
-    <script type="importmap">
-        {
-            "imports": {
-                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
-            }
-        }
-    </script>
-</head>
-<body>
 
-<div id="splashScreen">
-    <div id="splashOverlay"></div>
-    <div class="splash-content">
-        <h1>DFRP WILDFIRE SIMULATOR</h1>
-        <p>Real-time Physics Simulation v1.6</p>
-        <button id="startAppBtn">Start Simulation</button>
-    </div>
-</div>
-
-<div id="loading">
-    <div>Loading Map Data...</div>
-    <div style="font-size: 14px; margin-top: 10px;">Generating Environment & Syncing States...</div>
-</div>
-
-<div id="mainHelpModal" class="modal-overlay">...</div>
-<div id="moistureModal" class="modal-overlay">...</div>
-
-<div id="ui">
-    <div class="header-row">
-        <h3>DFRP Simulator v1.6</h3>
-        <button id="mainHelpBtn" title="Help & Info">?</button>
-    </div>
-    
-    <div class="control">
-        <label>Load Sector (What3Words)</label>
-        <div class="map-input-group">
-            <input type="text" id="w3wInput" placeholder="///waddled.crouches.spurring">
-            <button id="fetchW3wBtn">Fetch</button>
-        </div>
-        <label style="font-size: 9px; margin-top: 5px; color: #888;">Or upload local tape:</label>
-        <input type="file" id="mapUpload" accept="image/*">
-    </div>
-    <hr style="border-top:1px solid #ddd; margin: 15px 0;">
-
-    <div class="control">
-        <label>Simulation Speed <span id="simSpeedVal" class="val">1.0x</span></label>
-        <input type="range" id="simSpeed" min="0.1" max="5.0" step="0.1" value="1.0">
-    </div>
-    <div class="control">
-        <label>Wind Heading <span id="windDirVal" class="val">0°</span></label>
-        <input type="range" id="windDir" min="0" max="360" value="0">
-    </div>
-    <div class="control">
-        <label>Wind Speed <span id="windSpeedVal" class="val">25</span></label>
-        <input type="range" id="windSpeed" min="0" max="80" value="25">
-    </div>
-    <div class="control">
-        <label>Fuel Moisture <span id="moistureVal" class="val">15%</span><button class="info-trigger" id="infoBtn">i</button></label>
-        <input type="range" id="moisture" min="5" max="30" value="15">
-    </div>
-    <button id="resetBtn">Restart Terrain</button>
-    <div class="legend">
-        <strong>Map Features:</strong>
-        <div class="l-item"><div class="box" style="background:#777"></div>Roads / Concrete</div>
-        <div class="l-item"><div class="box" style="background:#999"></div>Urban Zone (Buildings)</div>
-        <div class="l-item"><div class="box" style="background:#4da6ff"></div>River / Water</div>
-        <div class="l-item"><div class="box" style="background:#004d00"></div>Timber Fuel</div>
-    </div>
-</div>
-
-<div id="toolbar">
-    <div class="tool" id="toolIgnite" title="Ignite Single Tree">🔥</div>
-    <div class="tool" id="toolCut" title="Precision Firebreak">🪓</div>
-    
-    <div class="data-readout">
-        <span class="data-label">Time of Day</span>
-        <span class="data-val" id="timeDisplay">10:00 AM</span>
-    </div>
-
-    <div class="data-readout">
-        <span class="data-label">Acres Burned</span>
-        <span class="data-val" id="acresDisplay">0.0</span>
-    </div>
-
-    <div id="compass" title="Terrain Orientation">
-        <svg id="compassSvg" viewBox="0 0 100 100">
-            <circle cx="50" cy="50" r="46" fill="#222" stroke="#555" stroke-width="2"/>
-            <text x="50" y="24" font-family="Arial" font-weight="bold" font-size="14" fill="#d32f2f" text-anchor="middle">N</text>
-            <path d="M50 28 L46 36 L54 36 Z" fill="#d32f2f" />
-        </svg>
-    </div>
-</div>
-
-<script type="module">
-    import * as THREE from 'three';
-    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-
-    // ... [KEEP PREVIOUS CONSTANTS & FUEL_PROPS] ...
-
-    let terrainData = null;
-    const img = new Image();
-    img.src = 'Screenshot 2026-02-20 at 15.27.44.jpg';
-
-    // --- NEW DYNAMIC MAP LOADING EVENT LISTENERS ---
-    
-    // 1. Local File Upload
-    document.getElementById('mapUpload').addEventListener('change', (e) => {
-        const file = e.target.files[0];
-        if (file) {
-            img.src = URL.createObjectURL(file);
-            init(); // Flush and reload the tape
-        }
-    });
-
-    // 2. What3Words Fetch
-    document.getElementById('fetchW3wBtn').addEventListener('click', async () => {
-        let words = document.getElementById('w3wInput').value.trim();
-        if (!words) return;
-        
-        // Strip the leading slashes if the user includes them
-        words = words.replace(/^[/]+/, '');
-        
-        // --- API INTEGRATION STRUCTURE ---
-        // To make this live, insert your API keys below and uncomment the fetch block.
-        
-        const W3W_API_KEY = 'YOUR_WHAT3WORDS_KEY';
-        const MAPBOX_API_KEY = 'YOUR_MAPBOX_KEY';
-
-        alert(`Ready to fetch coordinates for ///${words}.\n\n(Note: To pull live satellite imagery, insert your What3Words and Mapbox API keys in the JS source code.)`);
-
-        /*
-        try {
-            document.getElementById('loading').style.display = 'flex';
-            
-            // 1. Get Lat/Lng from What3Words
-            const w3wRes = await fetch(`https://api.what3words.com/v3/convert-to-coordinates?words=${words}&key=${W3W_API_KEY}`);
-            const w3wData = await w3wRes.json();
-            
-            if (w3wData.error) throw new Error(w3wData.error.message);
-            
-            const lat = w3wData.coordinates.lat;
-            const lng = w3wData.coordinates.lng;
-            
-            // 2. Fetch Satellite Image from Mapbox based on those coordinates
-            const mapboxUrl = `https://api.mapbox.com/styles/v1/mapbox/satellite-v9/static/${lng},${lat},15,0/512x512?access_token=${MAPBOX_API_KEY}`;
-            
-            img.crossOrigin = "Anonymous"; // Required for canvas sampling
-            img.src = mapboxUrl;
-            img.onload = () => init(); // Reload the simulation with the new sector tape
-            
-        } catch (err) {
-            alert("Error fetching map data: " + err.message);
-            document.getElementById('loading').style.display = 'none';
-        }
-        */
-    });
-
-    // ... [KEEP ALL PREVIOUS RENDER, SAMPLING AND PHYSICS LOGIC] ...
-    
-</script>
-</body>
-</html>
+        #compass {
+            width: 54px; height: 54px; border-radius: 50%;
+            background: #222; border: 2px solid #444;
+            display: flex; align-items: center; justify-content: center;
+            box-shadow: inset 0 0 10px rgba(0,0,
